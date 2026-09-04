@@ -8,7 +8,8 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: "dist/renderer",
-    emptyOutDir: false,
+    // Only renderer output is cleared; Electron and preload builds are siblings.
+    emptyOutDir: true,
     rollupOptions: {
       input: resolve(__dirname, "index.html")
     }

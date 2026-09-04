@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ATLAS_LOBBY_PLAYER_FIELD_PROBE,
+  atlasLobbyPlayerFieldRepairCssForUrl,
   readAtlasLobbyPlayerField,
   type AtlasLobbyPlayerFieldState
 } from "../src/shared/atlasLobbyPlayerField.js";
+import { atlasCardRenderingCssForUrl } from "../src/shared/atlasCardRendering.js";
 
 class LayoutElement {
   parentElement: LayoutElement | null = null;
@@ -220,5 +222,39 @@ describe("Atlas lobby player-field layout probe", () => {
     expect(page.read()).toBe("unavailable");
     page.document.querySelector = () => { throw new Error("Navigation in progress"); };
     expect(page.read()).toBe("unavailable");
+  });
+});
+
+describe("Atlas lobby player-field repair CSS", () => {
+  it.each(["/", "/lobby", "/lobby/", "/en", "/en/lobby", "/zh-CN/", "/zh-CN/lobby?from=desktop"])(
+    "is available only for the idle Atlas lobby route %s",
+    (path) => {
+      expect(atlasLobbyPlayerFieldRepairCssForUrl(`https://play.riftatlas.com${path}`)).not.toBe("");
+    }
+  );
+
+  it.each([
+    "https://tcg-arena.fr/", "https://play.riftatlas.com.evil.example/", "http://play.riftatlas.com/",
+    "https://play.riftatlas.com:444/", "https://clerk.riftatlas.com/", "https://play.riftatlas.com/game/ROOM",
+    "https://play.riftatlas.com/zh-CN/play/ROOM", "https://play.riftatlas.com/room/ROOM",
+    "https://play.riftatlas.com/sign-in", "https://play.riftatlas.com/decks", "not a URL"
+  ])("never produces repair CSS for %s", (url) => {
+    expect(atlasLobbyPlayerFieldRepairCssForUrl(url)).toBe("");
+  });
+
+  it("is a distinct, field-scoped fallback rather than the already-installed compatibility CSS", () => {
+    const repairCss = atlasLobbyPlayerFieldRepairCssForUrl("https://play.riftatlas.com/");
+    const compatibilityCss = atlasCardRenderingCssForUrl("https://play.riftatlas.com/");
+
+    expect(repairCss).not.toBe(compatibilityCss);
+    expect(repairCss).toContain(".lobby-entry-panel #right-rail-player-name");
+    expect(repairCss).toContain("display: flow-root !important");
+    expect(repairCss).toContain("contain: none !important");
+    expect(repairCss).toContain("min-block-size: 2.75rem !important");
+    expect(repairCss).toContain(":has(.lobby-quick-match-actions):has(.lobby-private-play-actions)");
+    expect(repairCss).toContain("min-block-size: 1px !important");
+    expect(repairCss).not.toMatch(/grid-(?:row|column)\s*:/);
+    expect(repairCss).not.toMatch(/(?:visibility|pointer-events|opacity|position|z-index)\s*:/);
+    expect(repairCss).not.toContain("image-rendering");
   });
 });

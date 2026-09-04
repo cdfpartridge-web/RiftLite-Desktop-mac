@@ -5,8 +5,10 @@ const main = readFileSync(new URL("../src/main/main.ts", import.meta.url), "utf8
 
 describe("Enhanced Insights replay mutation serialization", () => {
   it("orders replay saves and Enhanced Insights deletion on the same resilient queue", () => {
-    expect(main).toContain("enhancedInsightsDataMutationQueue.then(operation, operation)");
-    expect(main).toContain("enhancedInsightsDataMutationQueue = result.then(() => undefined, () => undefined)");
+    // Ordering and rejection recovery execute in serialMutationQueue.test.ts.
+    // This check only guards the application-wide wiring to that tested queue.
+    expect(main).toContain("const enhancedInsightsDataMutationQueue = new SerialMutationQueue()");
+    expect(main).toContain("return enhancedInsightsDataMutationQueue.run(operation)");
     expect(main).toMatch(
       /function saveReplayWithEnhancedInsightsDataMutation[\s\S]{0,240}enqueueEnhancedInsightsDataMutation\(\(\) => store\.saveReplay\(replay\)\)/
     );

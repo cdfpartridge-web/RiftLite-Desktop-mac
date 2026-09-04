@@ -37,38 +37,24 @@ describe("replay MP4 export lifecycle integration", () => {
     expect(source).toContain('"mp4"');
   });
 
-  it("holds one global lock and releases it before every terminal event", () => {
-    const begin = sourceBetween("function beginReplayMp4Export(", "function endReplayMp4Export(");
+  it("wires both formats and deferred quit to the executable lifecycle controller", () => {
     const replayWrapper = sourceBetween("async function exportReplayMp4(", "async function exportReplayMp4Unlocked(");
     const presentationWrapper = sourceBetween("async function exportReplayPresentationMp4(", "async function exportReplayPresentationMp4Unlocked(");
-
-    expect(begin).toContain("if (activeReplayMp4Export)");
-    expect(begin).toContain("Another MP4 export is already running");
-    expect(begin).not.toContain("emitReplayMp4ExportProgress");
+    // Locking, release ordering, failure and cancellation are exercised in
+    // replayMp4ExportLifecycle.test.ts rather than inferred from source order.
+    expect(mainSource.match(/new ReplayMp4ExportLifecycle\(/g)).toHaveLength(1);
+    expect(mainSource).toContain("onReleased: finishDeferredReplayMp4Quit");
     for (const wrapper of [replayWrapper, presentationWrapper]) {
-      const successRelease = wrapper.indexOf("endReplayMp4Export(context)");
-      const completed = wrapper.indexOf('stage: "completed"', successRelease);
-      const catchBlock = wrapper.indexOf("} catch (error)");
-      const failureRelease = wrapper.indexOf("endReplayMp4Export(context)", catchBlock);
-      const failed = wrapper.indexOf('stage: "failed"', failureRelease);
-      expect(completed).toBeGreaterThan(successRelease);
-      expect(failureRelease).toBeGreaterThan(catchBlock);
-      expect(failed).toBeGreaterThan(failureRelease);
+      expect(wrapper).toContain("return replayMp4ExportLifecycle.run(");
     }
+    expect(replayWrapper).toContain('kind: "replay", requestId, sender');
+    expect(presentationWrapper).toContain('kind: "presentation", requestId, sender');
+    expect(replayWrapper).toContain("exportReplayMp4Unlocked(replayId, options, context)");
+    expect(presentationWrapper).toContain("exportReplayPresentationMp4Unlocked(replayId, payload, context)");
   });
 
   it("validates and echoes the renderer request identity end to end", () => {
-    const begin = sourceBetween("function beginReplayMp4Export(", "function endReplayMp4Export(");
-    const emit = sourceBetween("function emitReplayMp4ExportProgress(", "function assertReplayMp4ExportRequestId(");
     const diagnostics = sourceBetween("function recordReplayMp4ExportLifecycle(", "function emitReplayMp4ExportProgress(");
-    const validationIndex = begin.indexOf("assertReplayMp4ExportRequestId(requestId)");
-    const lockIndex = begin.indexOf("if (activeReplayMp4Export)");
-
-    expect(validationIndex).toBeGreaterThanOrEqual(0);
-    expect(lockIndex).toBeGreaterThan(validationIndex);
-    expect(mainSource).toContain("!Number.isSafeInteger(requestId) || requestId <= 0");
-    expect(begin).toContain("requestId,");
-    expect(emit).toContain("requestId: context.requestId");
     expect(diagnostics).toContain("requestId: progress.requestId");
     expect(typesSource).toContain("requestId: number;");
     expect(typesSource).toContain("exportReplayMp4(replayId: string, options: ReplayMp4ExportOptions, requestId: number)");
@@ -126,7 +112,7 @@ describe("replay MP4 export lifecycle integration", () => {
     const createWindow = sourceBetween("async function createWindow(): Promise<void>", "function protocolNavigationFromArgs(");
     const beforeQuit = sourceBetween('app.on("before-quit"', 'app.on("will-quit"');
     const beforeInstallIndex = mainSource.indexOf("beforeInstall: async () =>");
-    const activeCheckIndex = mainSource.indexOf("if (activeReplayMp4Export)", beforeInstallIndex);
+    const activeCheckIndex = mainSource.indexOf("if (replayMp4ExportLifecycle.active)", beforeInstallIndex);
     const updateStopIndex = mainSource.indexOf('tcgaReplayResearchCapture.stop("update-install")', beforeInstallIndex);
 
     expect(createWindow).toContain('createdMainWindow.on("close"');

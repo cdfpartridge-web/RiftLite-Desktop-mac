@@ -84,8 +84,12 @@ import {
   atlasAuthoritativeMatchSignalFromState
 } from "../shared/atlasAuthoritativeMatch.js";
 import { atlasCardRenderingCssForUrl } from "../shared/atlasCardRendering.js";
-import { ATLAS_LOBBY_PLAYER_FIELD_PROBE } from "../shared/atlasLobbyPlayerField.js";
-import { AtlasLobbyPlayerFieldRepair } from "./services/atlasLobbyPlayerFieldRepair.js";
+import {
+  ATLAS_LOBBY_PLAYER_FIELD_PROBE,
+  atlasLobbyPlayerFieldRepairCssForUrl
+} from "../shared/atlasLobbyPlayerField.js";
+import { AtlasGuestRecoveryLifecycle } from "./services/atlasGuestRecoveryLifecycle.js";
+import { AtlasCompatibilityStyleInstaller } from "./services/atlasCompatibilityStyleInstaller.js";
 import { AtlasInvalidClaimsRecoveryBudget } from "../shared/atlasInvalidClaimsRecovery.js";
 import { AtlasKnownOpponentHandTracker } from "../shared/atlasKnownOpponentHand.js";
 import { shouldPresentAtlasResourceFailure } from "../shared/atlasResourceFailure.js";
@@ -250,6 +254,13 @@ import {
   type TcgaWebReplayBindingEvent
 } from "./services/tcgaWebReplayCaptureService.js";
 import { UpdaterService } from "./services/updaterService.js";
+import { SerialMutationQueue } from "./services/serialMutationQueue.js";
+import {
+  ReplayMp4ExportLifecycle,
+  assertReplayMp4ExportRequestId,
+  replayMp4ExportErrorMessage,
+  type ActiveReplayMp4Export
+} from "./services/replayMp4ExportLifecycle.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -346,7 +357,7 @@ let tcgaWebReplayCaptureService: TcgaWebReplayCaptureService<
 > | null = null;
 let tcgaWebReplayProductAccountUid = "";
 let tcgaWebReplayConfigurationTail: Promise<void> = Promise.resolve();
-let enhancedInsightsDataMutationQueue: Promise<void> = Promise.resolve();
+const enhancedInsightsDataMutationQueue = new SerialMutationQueue();
 const tcgaSeatCaptureBridge = new TcgaSeatCaptureBridge();
 let updater: UpdaterService;
 let registeredScreenshotHotkey = "";
@@ -361,9 +372,7 @@ const atlasAutomaticRecoverySafetyFence = new AtlasAutomaticRecoverySafetyFence(
 const embeddedWebviewPolicyBySession = new WeakMap<object, EmbeddedWebviewPolicy>();
 
 function enqueueEnhancedInsightsDataMutation<T>(operation: () => Promise<T>): Promise<T> {
-  const result = enhancedInsightsDataMutationQueue.then(operation, operation);
-  enhancedInsightsDataMutationQueue = result.then(() => undefined, () => undefined);
-  return result;
+  return enhancedInsightsDataMutationQueue.run(operation);
 }
 
 function saveReplayWithEnhancedInsightsDataMutation(replay: ReplayRecord): Promise<ReplayRecord> {
@@ -398,18 +407,12 @@ type ConfirmedMatchDeliveryJob = {
   pending: Promise<void> | null;
 };
 const confirmedMatchDeliveryByMatchId = new Map<string, ConfirmedMatchDeliveryJob>();
-type ActiveReplayMp4Export = {
-  exportId: string;
-  requestId: number;
-  replayId: string;
-  kind: ReplayMp4ExportProgress["kind"];
-  sender: WebContents;
-  stage: ReplayMp4ExportProgress["stage"];
-  percent?: number;
-  lastDiagnosticStage?: ReplayMp4ExportProgress["stage"];
-};
-let activeReplayMp4Export: ActiveReplayMp4Export | null = null;
-let lastCompletedReplayMp4ExportPath = "";
+const replayMp4ExportLifecycle = new ReplayMp4ExportLifecycle({
+  createId: randomUUID,
+  recordProgress: recordReplayMp4ExportLifecycle,
+  onReleased: finishDeferredReplayMp4Quit,
+  logFailure: logStartupIssue
+});
 let replayMp4QuitPending = false;
 let replayMp4WindowClosePending: BrowserWindow | null = null;
 let replayMp4QuitNoticeShown = false;
@@ -440,7 +443,7 @@ const atlasRecentResourceFailures: AtlasResourceFailureDiagnostic[] = [];
 let atlasRecoveryCompletedAt: number | undefined;
 let atlasSessionDiagnosticsInstalled = false;
 const atlasEmptyShellMainRecovery = new AtlasEmptyShellMainRecoveryGuard();
-const atlasLobbyPlayerFieldRepairsByGuest = new Map<number, AtlasLobbyPlayerFieldRepair>();
+const atlasGuestRecoveryByGuest = new Map<number, AtlasGuestRecoveryLifecycle>();
 const ATLAS_EMPTY_SHELL_MAIN_RELOAD_DELAY_MS = 5_000;
 const ATLAS_INVALID_CLAIMS_RECOVERY_DELAY_MS = 5_000;
 
@@ -5072,11 +5075,6 @@ async function replayMp4VoiceInputs(
   return result;
 }
 
-function replayMp4ExportErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  return message.replace(/\s+/g, " ").trim().slice(0, 1_000) || "MP4 export failed.";
-}
-
 function recordReplayMp4ExportLifecycle(progress: ReplayMp4ExportProgress): void {
   if (typeof diagnostics === "undefined") {
     return;
@@ -5105,60 +5103,10 @@ function emitReplayMp4ExportProgress(
   context: ActiveReplayMp4Export,
   patch: Omit<ReplayMp4ExportProgress, "exportId" | "requestId" | "replayId" | "kind">
 ): void {
-  context.stage = patch.stage;
-  context.percent = patch.percent;
-  const progress: ReplayMp4ExportProgress = {
-    exportId: context.exportId,
-    requestId: context.requestId,
-    replayId: context.replayId,
-    kind: context.kind,
-    ...patch
-  };
-  if (!context.sender.isDestroyed()) {
-    try {
-      context.sender.send("replay:mp4-export-progress", progress);
-    } catch {
-      // Export remains main-process owned if the renderer disappears.
-    }
-  }
-  if (context.lastDiagnosticStage !== progress.stage) {
-    context.lastDiagnosticStage = progress.stage;
-    recordReplayMp4ExportLifecycle(progress);
-  }
+  replayMp4ExportLifecycle.emit(context, patch);
 }
 
-function assertReplayMp4ExportRequestId(requestId: number): void {
-  if (!Number.isSafeInteger(requestId) || requestId <= 0) {
-    throw new Error("MP4 export request identity is invalid.");
-  }
-}
-
-function beginReplayMp4Export(
-  replayId: string,
-  kind: ReplayMp4ExportProgress["kind"],
-  requestId: number,
-  sender: WebContents
-): ActiveReplayMp4Export {
-  assertReplayMp4ExportRequestId(requestId);
-  if (activeReplayMp4Export) {
-    throw new Error("Another MP4 export is already running. Wait for it to finish before starting another export.");
-  }
-  const context: ActiveReplayMp4Export = {
-    exportId: randomUUID(),
-    requestId,
-    replayId,
-    kind,
-    sender,
-    stage: "preparing"
-  };
-  activeReplayMp4Export = context;
-  return context;
-}
-
-function endReplayMp4Export(context: ActiveReplayMp4Export): void {
-  if (activeReplayMp4Export?.exportId === context.exportId) {
-    activeReplayMp4Export = null;
-  }
+function finishDeferredReplayMp4Quit(): void {
   replayMp4QuitNoticeShown = false;
   if (replayMp4QuitPending) {
     replayMp4QuitPending = false;
@@ -5177,7 +5125,7 @@ function deferQuitForReplayMp4Export(
   intent: "quit" | "close-window" = "quit",
   windowToClose?: BrowserWindow
 ): boolean {
-  const context = activeReplayMp4Export;
+  const context = replayMp4ExportLifecycle.active;
   if (!context) {
     return false;
   }
@@ -5467,7 +5415,7 @@ async function promoteReplayMp4Output(
 }
 
 async function revealLastReplayMp4Export(): Promise<void> {
-  const filePath = lastCompletedReplayMp4ExportPath;
+  const filePath = replayMp4ExportLifecycle.lastCompletedPath;
   if (!filePath) {
     throw new Error("No completed MP4 export is available yet.");
   }
@@ -5475,7 +5423,7 @@ async function revealLastReplayMp4Export(): Promise<void> {
     const fileStats = await stat(filePath);
     if (!fileStats.isFile()) throw new Error("not a file");
   } catch {
-    lastCompletedReplayMp4ExportPath = "";
+    replayMp4ExportLifecycle.lastCompletedPath = "";
     throw new Error("The last exported MP4 has been moved or deleted.");
   }
   shell.showItemInFolder(filePath);
@@ -5553,36 +5501,10 @@ async function exportReplayMp4(
   requestId: number,
   sender: WebContents
 ): Promise<string> {
-  const context = beginReplayMp4Export(replayId, "replay", requestId, sender);
-  try {
-    const outputPath = await exportReplayMp4Unlocked(replayId, options, context);
-    endReplayMp4Export(context);
-    if (outputPath) {
-      lastCompletedReplayMp4ExportPath = outputPath;
-      emitReplayMp4ExportProgress(context, {
-        stage: "completed",
-        percent: 100,
-        message: "MP4 export complete.",
-        outputPath
-      });
-    }
-    return outputPath;
-  } catch (error) {
-    const message = replayMp4ExportErrorMessage(error);
-    endReplayMp4Export(context);
-    emitReplayMp4ExportProgress(context, {
-      stage: "failed",
-      percent: context.percent,
-      message,
-      error: message
-    });
-    await logStartupIssue("Replay MP4 export failed", JSON.stringify({
-      exportId: context.exportId,
-      replayId,
-      error: message
-    }));
-    throw error;
-  }
+  return replayMp4ExportLifecycle.run(
+    { replayId, kind: "replay", requestId, sender },
+    (context) => exportReplayMp4Unlocked(replayId, options, context)
+  );
 }
 
 async function exportReplayMp4Unlocked(
@@ -5802,36 +5724,10 @@ async function exportReplayPresentationMp4(
   if (!payload?.data || payload.data.byteLength <= 0) {
     throw new Error("No Full Voiceover recording was received.");
   }
-  const context = beginReplayMp4Export(replayId, "presentation", requestId, sender);
-  try {
-    const outputPath = await exportReplayPresentationMp4Unlocked(replayId, payload, context);
-    endReplayMp4Export(context);
-    if (outputPath) {
-      lastCompletedReplayMp4ExportPath = outputPath;
-      emitReplayMp4ExportProgress(context, {
-        stage: "completed",
-        percent: 100,
-        message: "Full Voiceover MP4 export complete.",
-        outputPath
-      });
-    }
-    return outputPath;
-  } catch (error) {
-    const message = replayMp4ExportErrorMessage(error);
-    endReplayMp4Export(context);
-    emitReplayMp4ExportProgress(context, {
-      stage: "failed",
-      percent: context.percent,
-      message,
-      error: message
-    });
-    await logStartupIssue("Replay presentation MP4 export failed", JSON.stringify({
-      exportId: context.exportId,
-      replayId,
-      error: message
-    }));
-    throw error;
-  }
+  return replayMp4ExportLifecycle.run(
+    { replayId, kind: "presentation", requestId, sender },
+    (context) => exportReplayPresentationMp4Unlocked(replayId, payload, context)
+  );
 }
 
 async function exportReplayPresentationMp4Unlocked(
@@ -8114,12 +8010,16 @@ function handleAtlasShellStatusEvent(sender: WebContents, event: CaptureEvent): 
   ) {
     return;
   }
+  const guestLifecycle = atlasGuestRecoveryByGuest.get(sender.id);
+  // Readiness is diagnostic and can precede slow subresources finishing.
+  // Mutations separately require an idle main frame and the same epoch.
+  if (!guestLifecycle?.matchesCommittedDocument()) return;
+  const documentEpoch = guestLifecycle.documentEpoch;
   if (reason === "atlas-lobby-player-field-collapsed") {
-    // A blocked external navigation may leave the real lobby intact while the
-    // empty-shell tracker still holds the attempted destination. This separate
-    // CSS controller tracks committed documents and remeasures the live guest.
+    // Layout repair has its own per-document budget and never enters the
+    // empty-shell reload path; both now share committed-document identity.
     if (reportedUrl === senderUrl) {
-      void atlasLobbyPlayerFieldRepairsByGuest.get(sender.id)?.check();
+      void guestLifecycle.check();
     }
     return;
   }
@@ -8145,7 +8045,8 @@ function handleAtlasShellStatusEvent(sender: WebContents, event: CaptureEvent): 
         targetGuestId: sender.id,
         currentGuestId: currentAtlasGuest?.id ?? null,
         currentUrl,
-        navigationCurrent: atlasEmptyShellMainRecovery.isCurrentNavigation(sender.id, reportedUrl),
+        navigationCurrent: guestLifecycle.isCurrentDocument(documentEpoch) &&
+          atlasEmptyShellMainRecovery.isCurrentNavigation(sender.id, reportedUrl),
         protectedByGameEntry: atlasAutomaticRecoverySafetyFence.isProtected(sender.id, currentUrl),
         platformSwitchAllowed: capture.getGamePlatformSwitchStatus().allowed
       });
@@ -8196,7 +8097,8 @@ function handleAtlasShellStatusEvent(sender: WebContents, event: CaptureEvent): 
       targetGuestId: sender.id,
       currentGuestId: currentAtlasGuest?.id ?? null,
       currentUrl,
-      navigationCurrent: atlasEmptyShellMainRecovery.isCurrentNavigation(sender.id, reportedUrl),
+      navigationCurrent: guestLifecycle.isCurrentDocument(documentEpoch) &&
+        atlasEmptyShellMainRecovery.isCurrentNavigation(sender.id, reportedUrl),
       protectedByGameEntry: atlasAutomaticRecoverySafetyFence.isProtected(sender.id, currentUrl),
       platformSwitchAllowed: capture.getGamePlatformSwitchStatus().allowed
     });
@@ -8236,7 +8138,7 @@ function handleAtlasShellStatusEvent(sender: WebContents, event: CaptureEvent): 
       targetGuestId: sender.id,
       currentGuestId: gameWebContentsByPlatform.get("atlas")?.id ?? null,
       currentUrl: finalUrl,
-      navigationCurrent: atlasEmptyShellMainRecovery.canFinishCommittedReload(
+      navigationCurrent: guestLifecycle.isCurrentDocument(documentEpoch) && atlasEmptyShellMainRecovery.canFinishCommittedReload(
         recoveryKey,
         sender.id,
         navigationKey
@@ -8284,7 +8186,7 @@ async function createWindow(): Promise<void> {
   });
   const createdMainWindow = mainWindow;
   createdMainWindow.on("close", (event) => {
-    if (!activeReplayMp4Export) {
+    if (!replayMp4ExportLifecycle.active) {
       return;
     }
     event.preventDefault();
@@ -8394,7 +8296,6 @@ async function createWindow(): Promise<void> {
     }
     gameWebContentsByPlatform.set(policy.platform, webContents);
     secureGameWebContents(webContents, policy);
-    atlasEmptyShellMainRecovery.beginNavigation(webContents.id, webContents.getURL());
     maybeInstallRawCaptureWebSocketTap(webContents);
     if (policy.platform === "tcga" && tcgaWebReplayProductAccountUid) {
       tcgaWebReplayCaptureService?.beginDocument(webContents.id);
@@ -8407,64 +8308,14 @@ async function createWindow(): Promise<void> {
       installTcgaReplayResearchTap(webContents);
     }
     installFullscreenShortcut(webContents);
-    let atlasCardRenderingGeneration = 0;
-    let atlasCardRenderingCssKey = "";
-    let atlasCardRenderingPendingGeneration: number | null = null;
-    let atlasCardRenderingAttemptCount = 0;
-    let atlasCardRenderingRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    const atlasCardRendering = new AtlasCompatibilityStyleInstaller({
+      isDestroyed: () => webContents.isDestroyed(),
+      cssForCurrentUrl: () => atlasCardRenderingCssForUrl(webContents.getURL()),
+      insertCss: (css) => webContents.insertCSS(css),
+      removeCss: (key) => webContents.removeInsertedCSS(key),
+      reportFailure: (error) => { void logStartupIssue("Atlas card rendering CSS failed", error); }
+    });
     let mainNavigationStartedAt = 0;
-    const invalidateAtlasCardRendering = () => {
-      atlasCardRenderingGeneration += 1;
-      atlasCardRenderingCssKey = "";
-      atlasCardRenderingPendingGeneration = null;
-      atlasCardRenderingAttemptCount = 0;
-      if (atlasCardRenderingRetryTimer) {
-        clearTimeout(atlasCardRenderingRetryTimer);
-        atlasCardRenderingRetryTimer = undefined;
-      }
-    };
-    const installAtlasCardRendering = () => {
-      if (webContents.isDestroyed()) {
-        return;
-      }
-      const cardRenderingCss = atlasCardRenderingCssForUrl(webContents.getURL());
-      const generation = atlasCardRenderingGeneration;
-      if (!cardRenderingCss || atlasCardRenderingCssKey || atlasCardRenderingPendingGeneration === generation) {
-        return;
-      }
-      atlasCardRenderingPendingGeneration = generation;
-      atlasCardRenderingAttemptCount += 1;
-      void webContents.insertCSS(cardRenderingCss).then((cssKey) => {
-        if (
-          webContents.isDestroyed() ||
-          generation !== atlasCardRenderingGeneration ||
-          !atlasCardRenderingCssForUrl(webContents.getURL())
-        ) {
-          if (!webContents.isDestroyed()) {
-            void webContents.removeInsertedCSS(cssKey).catch(() => undefined);
-          }
-          return;
-        }
-        atlasCardRenderingCssKey = cssKey;
-      }).catch((error) => {
-        void logStartupIssue("Atlas card rendering CSS failed", error);
-        if (
-          !webContents.isDestroyed() &&
-          generation === atlasCardRenderingGeneration &&
-          atlasCardRenderingAttemptCount < 3 &&
-          atlasCardRenderingCssForUrl(webContents.getURL())
-        ) {
-          atlasCardRenderingRetryTimer = setTimeout(() => {
-            atlasCardRenderingRetryTimer = undefined;
-            installAtlasCardRendering();
-          }, 150);
-        }
-      }).finally(() => {
-        if (atlasCardRenderingPendingGeneration === generation) {
-          atlasCardRenderingPendingGeneration = null;
-        }
-      });
-    };
     const reportGuestLifecycle = (
       reason: string,
       payload: Record<string, unknown> = {},
@@ -8508,29 +8359,19 @@ async function createWindow(): Promise<void> {
         installTcgaReplayResearchTap(webContents);
       }
     };
-    let atlasPlayerFieldCommittedUrl = webContents.getURL();
-    const atlasPlayerFieldRepairSafe = () => {
-      if (policy.platform !== "atlas" || webContents.isDestroyed() || webContents.isLoadingMainFrame()) {
-        return false;
-      }
-      const currentUrl = webContents.getURL();
-      return canStartAtlasAutomaticRecovery({
-        targetGuestId: webContents.id,
-        currentGuestId: gameWebContentsByPlatform.get("atlas")?.id ?? null,
-        currentUrl,
-        navigationCurrent: currentUrl === atlasPlayerFieldCommittedUrl,
-        platformSwitchAllowed: capture.getGamePlatformSwitchStatus().allowed,
-        protectedByGameEntry: atlasAutomaticRecoverySafetyFence.isProtected(webContents.id, currentUrl)
-      });
-    };
-    const atlasPlayerFieldRepair = new AtlasLobbyPlayerFieldRepair({
-      isSafe: atlasPlayerFieldRepairSafe,
+    const guestRecovery = new AtlasGuestRecoveryLifecycle({
+      guest: webContents,
+      platform: policy.platform,
+      emptyShellRecovery: atlasEmptyShellMainRecovery,
+      currentAtlasGuestId: () => gameWebContentsByPlatform.get("atlas")?.id ?? null,
+      platformSwitchAllowed: () => capture.getGamePlatformSwitchStatus().allowed,
+      protectedByGameEntry: (url) => atlasAutomaticRecoverySafetyFence.isProtected(webContents.id, url),
       readField: () => webContents.executeJavaScript(ATLAS_LOBBY_PLAYER_FIELD_PROBE),
       applyCss: async () => {
         // The controller rechecks document identity and live safety immediately
         // before calling. Only trusted local CSS is ever inserted, at most once
         // more per document; no old style removal or navigation is necessary.
-        await webContents.insertCSS(atlasCardRenderingCssForUrl(webContents.getURL()));
+        await webContents.insertCSS(atlasLobbyPlayerFieldRepairCssForUrl(webContents.getURL()));
       },
       report: (outcome) => {
         reportGuestLifecycle(`atlas-lobby-player-field-${outcome}`);
@@ -8548,13 +8389,13 @@ async function createWindow(): Promise<void> {
       }
     });
     if (policy.platform === "atlas") {
-      atlasLobbyPlayerFieldRepairsByGuest.set(webContents.id, atlasPlayerFieldRepair);
+      atlasGuestRecoveryByGuest.set(webContents.id, guestRecovery);
     }
     webContents.on("did-start-navigation", (_navigationEvent, url, isInPlace, isMainFrame) => {
       if (isMainFrame && !isInPlace) {
         // A prevented link can start navigation without replacing the document.
         // Cancel pending work now, but renew its budget only on a real commit.
-        atlasPlayerFieldRepair.navigationChanged(false);
+        guestRecovery.navigationStarted(isInPlace, isMainFrame);
         mainNavigationStartedAt = Date.now();
         if (policy.platform === "tcga") {
           tcgaSeatCaptureBridge.forgetWebContents(webContents.id);
@@ -8562,8 +8403,7 @@ async function createWindow(): Promise<void> {
         if (policy.platform === "tcga" && tcgaWebReplayProductAccountUid) {
           tcgaWebReplayCaptureService?.beginDocument(webContents.id);
         }
-        invalidateAtlasCardRendering();
-        atlasEmptyShellMainRecovery.beginNavigation(webContents.id, url);
+        atlasCardRendering.invalidate();
         reportGuestLifecycle("guest-main-navigation-start", {}, url);
       }
     });
@@ -8571,7 +8411,7 @@ async function createWindow(): Promise<void> {
       reportGuestLifecycle("guest-main-load-finished", {
         loadDurationMs: mainNavigationStartedAt ? Math.max(0, Date.now() - mainNavigationStartedAt) : 0
       });
-      installAtlasCardRendering();
+      atlasCardRendering.install();
       if (
         IS_PACKAGED_SMOKE_TEST &&
         UI_SNAPSHOT_PATH &&
@@ -8608,34 +8448,29 @@ async function createWindow(): Promise<void> {
       }
     });
     webContents.on("did-navigate", (_navigationEvent, url) => {
-      atlasPlayerFieldCommittedUrl = url;
-      atlasPlayerFieldRepair.navigationChanged(true);
+      guestRecovery.navigationCommitted(url);
       refreshGuestContext();
     });
     webContents.on("did-navigate-in-page", (_navigationEvent, url, isMainFrame) => {
       if (isMainFrame && policy.platform === "atlas") {
-        atlasPlayerFieldCommittedUrl = url;
-        atlasPlayerFieldRepair.navigationChanged(false);
-        atlasEmptyShellMainRecovery.beginNavigation(webContents.id, url);
-        void atlasPlayerFieldRepair.check();
+        guestRecovery.inPageNavigationCommitted(url, isMainFrame);
       }
       refreshGuestContext();
     });
     webContents.on("dom-ready", () => {
       refreshGuestContext();
-      installAtlasCardRendering();
-      void atlasPlayerFieldRepair.check();
+      atlasCardRendering.install();
+      void guestRecovery.check();
     });
-    installAtlasCardRendering();
+    atlasCardRendering.install();
     webContents.once("destroyed", () => {
       const wasCurrentAtlasGuest = policy.platform === "atlas"
         && gameWebContentsByPlatform.get("atlas")?.id === webContents.id;
-      invalidateAtlasCardRendering();
-      atlasPlayerFieldRepair.dispose();
-      atlasLobbyPlayerFieldRepairsByGuest.delete(webContents.id);
+      atlasCardRendering.dispose();
+      guestRecovery.dispose();
+      atlasGuestRecoveryByGuest.delete(webContents.id);
       rawCaptureIngressLimiter.forget(webContents.id);
       forgetGameWebContents(webContents);
-      atlasEmptyShellMainRecovery.forgetGuest(webContents.id);
       atlasAutomaticRecoverySafetyFence.forget(webContents.id);
       if (wasCurrentAtlasGuest && atlasKnownOpponentHandTracker.reset()) {
         publishAtlasKnownOpponentHandState();
@@ -9947,7 +9782,7 @@ app.whenReady().then(async () => {
         // electron-updater must own the quit that launches the downloaded
         // installer. Finalize the research capture first and then allow that
         // quit through the global before-quit guard.
-        if (activeReplayMp4Export) {
+        if (replayMp4ExportLifecycle.active) {
           throw new Error("An MP4 export is still running. Wait for it to finish, then choose Install again.");
         }
         try {

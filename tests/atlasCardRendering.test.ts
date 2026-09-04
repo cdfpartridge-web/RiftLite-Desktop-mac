@@ -1,18 +1,21 @@
-import { readFileSync } from "node:fs";
-
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { atlasCardRenderingCssForUrl } from "../src/shared/atlasCardRendering.js";
+import { AtlasCompatibilityStyleInstaller } from "../src/main/services/atlasCompatibilityStyleInstaller.js";
 
-const mainSource = readFileSync(new URL("../src/main/main.ts", import.meta.url), "utf8");
-
-function sourceBetween(source: string, startMarker: string, endMarker: string): string {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
-  if (start < 0 || end < 0) {
-    throw new Error(`Could not find source block between ${startMarker} and ${endMarker}.`);
-  }
-  return source.slice(start, end);
+function styleFixture() {
+  const state = { destroyed: false, url: "https://play.riftatlas.com/" };
+  const insertCss = vi.fn(async (_css: string) => "style-key");
+  const removeCss = vi.fn(async (_key: string) => undefined);
+  const reportFailure = vi.fn();
+  const installer = new AtlasCompatibilityStyleInstaller({
+    isDestroyed: () => state.destroyed,
+    cssForCurrentUrl: () => atlasCardRenderingCssForUrl(state.url),
+    insertCss, removeCss, reportFailure
+  });
+  return { state, insertCss, removeCss, reportFailure, installer };
 }
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe("Atlas card rendering", () => {
   it("sharpens only card artwork on low-DPI Atlas boards", () => {
@@ -44,16 +47,75 @@ describe("Atlas card rendering", () => {
   });
 
   it("retries a rejected compatibility-style insertion without crossing navigations", () => {
-    const lifecycle = sourceBetween(
-      mainSource,
-      "let atlasCardRenderingGeneration = 0",
-      "const reportGuestLifecycle"
-    );
+    const fixture = styleFixture();
+    fixture.installer.install();
+    fixture.installer.install();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(1);
+    fixture.installer.dispose();
+  });
 
-    expect(lifecycle).toContain("atlasCardRenderingAttemptCount < 3");
-    expect(lifecycle).toContain("generation === atlasCardRenderingGeneration");
-    expect(lifecycle).toContain("atlasCardRenderingRetryTimer = setTimeout");
-    expect(lifecycle).toContain("installAtlasCardRendering();");
-    expect(lifecycle).toContain("clearTimeout(atlasCardRenderingRetryTimer)");
+  it("retries rejected insertions twice, then keeps its budget exhausted until invalidation", async () => {
+    vi.useFakeTimers();
+    const fixture = styleFixture();
+    fixture.insertCss.mockRejectedValue(new Error("insertion unavailable"));
+    fixture.installer.install();
+    await vi.runAllTimersAsync();
+    fixture.installer.install();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(3);
+    expect(fixture.reportFailure).toHaveBeenCalledTimes(3);
+    fixture.installer.invalidate();
+    fixture.insertCss.mockResolvedValue("next-document-style");
+    fixture.installer.install();
+    await vi.runAllTimersAsync();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(4);
+    fixture.installer.dispose();
+  });
+
+  it("removes an insertion that finishes after navigation without unlocking the new document", async () => {
+    const fixture = styleFixture();
+    let resolveOld!: (key: string) => void;
+    let resolveNew!: (key: string) => void;
+    fixture.insertCss.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveNew = resolve; }));
+    fixture.installer.install();
+    fixture.installer.invalidate();
+    fixture.installer.install();
+    resolveOld("old-document-style");
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    fixture.installer.install();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(2);
+    expect(fixture.removeCss).toHaveBeenCalledExactlyOnceWith("old-document-style");
+    resolveNew("new-document-style");
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    fixture.installer.install();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(2);
+    fixture.installer.dispose();
+  });
+
+  it("cancels retry timers on navigation and disposal", async () => {
+    vi.useFakeTimers();
+    const fixture = styleFixture();
+    fixture.insertCss.mockRejectedValue(new Error("insertion unavailable"));
+    fixture.installer.install();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.installer.invalidate();
+    await vi.runAllTimersAsync();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(1);
+    fixture.installer.install();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.installer.dispose();
+    await vi.runAllTimersAsync();
+    fixture.installer.install();
+    expect(fixture.insertCss).toHaveBeenCalledTimes(2);
+  });
+
+  it("never inserts for another platform or a destroyed guest", () => {
+    const fixture = styleFixture();
+    fixture.state.url = "https://tcg-arena.fr/";
+    fixture.installer.install();
+    fixture.state.url = "https://play.riftatlas.com/";
+    fixture.state.destroyed = true;
+    fixture.installer.install();
+    expect(fixture.insertCss).not.toHaveBeenCalled();
   });
 });

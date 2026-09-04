@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { deflateRawSync } from "node:zlib";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
@@ -378,6 +378,51 @@ describe("FirebaseSyncService account cloud sync", () => {
     const manifestWrite = (request.mock.calls as Array<[string, string, RequestOptions]>)
       .find(([path, , options]) => options.method === "PATCH" && path.endsWith("/manifest/current"));
     expect(manifestWrite?.[2].precondition).toEqual({ exists: false });
+  });
+
+  it("requests the replay-free export and keeps cloud data and consent redaction intact", async () => {
+    const source = backup(baseSettings());
+    source.settings.username = "Backup Player";
+    source.settings.rawCapture.webReplayAutoUploadEnabled = true;
+    source.settings.rawCapture.webReplayAutoUploadAccountUid = "account-1";
+    source.settings.rawCapture.webReplayDiscordShareEnabled = true;
+    source.settings.rawCapture.webReplayDiscordShareAccountUid = "account-1";
+    source.settings.rawCapture.webReplayDiscordShareHubIds = ["private-hub"];
+    source.matches = [{ id: "kept-match", notes: "Match note" } as RiftLiteBackupFile["matches"][number]];
+    source.decks = [{ id: "kept-deck", title: "Deck title" } as RiftLiteBackupFile["decks"][number]];
+    source.notebooks = [{ deckId: "kept-deck", goals: [] } as RiftLiteBackupFile["notebooks"][number]];
+    const { service, store } = harness(source);
+    let currentManifest: Record<string, unknown> | null = null;
+    const request = replaceFirestoreRequest(service, async (path, _token, options) => {
+      if (options.method === "GET") {
+        if (!currentManifest) throw new Error("Firestore 404");
+        return currentManifest;
+      }
+      if (options.method === "PATCH" && path.endsWith("/manifest/current")) {
+        currentManifest = { fields: options.body?.fields ?? {}, updateTime: "created-update-time" };
+      }
+      return {};
+    });
+
+    await service.uploadAccountCloudSync();
+
+    expect(store.exportBackupData).toHaveBeenCalledWith({ includeRecycleBin: false, includeReplays: false });
+    const chunks = request.mock.calls
+      .filter(([path, , options]) => options.method === "PATCH" && path.includes("/chunks/"))
+      .map(([, , options]) => (options.body!.fields!.payload as { stringValue: string }).stringValue);
+    const uploaded = JSON.parse(inflateRawSync(Buffer.from(chunks.join(""), "base64")).toString("utf8")) as RiftLiteBackupFile;
+    expect(uploaded.matches).toEqual(source.matches);
+    expect(uploaded.decks).toEqual(source.decks);
+    expect(uploaded.notebooks).toEqual(source.notebooks);
+    expect(uploaded.replays).toEqual([]);
+    expect(uploaded.deletedReplays).toEqual([]);
+    expect(uploaded.settings.username).toBe("Backup Player");
+    expect(uploaded.settings.firebaseRefreshToken).toBe("");
+    expect(uploaded.settings.rawCapture).toMatchObject({
+      webReplayAutoUploadEnabled: false, webReplayAutoUploadAccountUid: "",
+      webReplayDiscordShareEnabled: false, webReplayDiscordShareAccountUid: "", webReplayDiscordShareHubIds: [],
+      uploadEnabled: false, apiKey: "", visibility: "private"
+    });
   });
 
   it("does not overwrite a newer sequential generation from another device", async () => {

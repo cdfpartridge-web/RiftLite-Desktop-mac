@@ -9,8 +9,9 @@ import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { deckNotebookWithCurrentVersion, deckSnapshotHash, emptyDeckNotebook, normalizeDeckNotebook, sanitizeDeckNotebookForDeck } from "../../shared/deckNotebook.js";
 import { normalizeLegendName } from "../../shared/legendNames.js";
 import { buildCombinedBo3Match, buildMatchCombinePreview, markOriginalAsCombined, restoreCombinedOriginal, type MatchCombinePreview, type MatchCombineSavePayload } from "../../shared/matchCombine.js";
+import { createDefaultSettings, DEFAULT_RAW_CAPTURE_ENDPOINT } from "../../shared/settingsDefaults.js";
 import { replayWithIntelligence } from "../../shared/replayIntelligence.js";
-import type { CaptureEvent, DeckNotebook, ImportSummary, MatchDraft, OverlayDisplayOptions, ReplayFolder, ReplayRecord, RiftLiteBackupFile, RiftLiteBackupOptions, SavedDeck, UserSettings } from "../../shared/types.js";
+import type { CaptureEvent, DeckNotebook, ImportSummary, MatchDraft, ReplayFolder, ReplayRecord, RiftLiteBackupFile, RiftLiteBackupOptions, SavedDeck, UserSettings } from "../../shared/types.js";
 import { sanitizeBackupFile } from "./backupSanitizer.js";
 import { redactCorruptSettingsText, redactSensitiveSettings, sensitiveCredentialPatch, stripLegacyHubSecrets, type ProtectedSettingsResult, type SecureCredentialVault } from "./secureCredentialVault.js";
 import {
@@ -52,96 +53,7 @@ const LEGACY_IMPORT_METADATA_KEY = "legacy-import-fingerprint-v1";
 const STORED_PAYLOAD_MIGRATION_METADATA_KEY = "stored-payload-migration-version";
 const STORED_PAYLOAD_MIGRATION_VERSION = "1";
 const OLD_RAW_CAPTURE_ENDPOINT = "https://test.riftreplay.com/api/v1/replays";
-const DEFAULT_RAW_CAPTURE_ENDPOINT = "https://riftreplay.com/api/v1/replays";
 const PRIVATE_HUB_WEB_REPLAY_GRANT_RETRY_LIMIT = 2_000;
-
-const DEFAULT_SETTINGS: UserSettings = {
-  username: "",
-  firstRunComplete: false,
-  lastSeenVersion: "",
-  defaultGamePlatform: "tcga",
-  homeDeckThemeEnabled: false,
-  syncMode: "community-and-hubs",
-  communitySyncEnabled: true,
-  firebaseUid: "",
-  firebaseRefreshToken: "",
-  firebaseCredentialGeneration: "",
-  accountUid: "",
-  accountEmail: "",
-  accountHandle: "",
-  accountDisplayName: "",
-  accountProfilePublic: false,
-  accountLastVerifiedAt: "",
-  accountLastVerificationError: "",
-  accountCloudSyncEnabled: false,
-  accountCloudSyncLastSyncedAt: "",
-  accountCloudSyncLastRestoredAt: "",
-  accountCloudSyncDeviceId: "",
-  accountCloudSyncDeviceName: "",
-  accountCloudSyncRemoteGenerationId: "",
-  accountCloudSyncLastError: "",
-  anonymousDiagnosticsEnabled: true,
-  anonymousInstallId: "",
-  anonymousInstallCreatedAt: "",
-  anonymousUsageLastHeartbeatAt: "",
-  anonymousUsageLastHeartbeatVersion: "",
-  enhancedInsightsEnabled: false,
-  enhancedInsightsIntroSeen: false,
-  enhancedInsightsPostGamePromptEnabled: true,
-  debugMode: false,
-  confirmationEnabled: true,
-  replayCaptureEnabled: true,
-  replayKeyframesEnabled: true,
-  replayFramePreset: "standard",
-  replayVideoEnabled: true,
-  replayVideoMode: "game-frame",
-  replayVideoQuality: "sharp",
-  replayMicAudioEnabled: false,
-  replayCustomFlagTypes: ["Mistake Consequence", "Question", "Alternative Line"],
-  replayFolders: [],
-  replayShadowClipEnabled: false,
-  replayShadowClipSeconds: 60,
-  replayShadowClipHotkey: "CommandOrControl+Shift+C",
-  replayShadowClipHotkeyEnabled: true,
-  replayQuickFlagHotkey: "CommandOrControl+Shift+F",
-  replayQuickFlagHotkeyEnabled: true,
-  rawCapture: {
-    enabled: false,
-    webReplayAutoUploadEnabled: false,
-    webReplayAutoUploadAccountUid: "",
-    tcgaWebReplayAutoUploadEnabled: false,
-    tcgaWebReplayAutoUploadAccountUid: "",
-    webReplayDiscordShareEnabled: false,
-    webReplayDiscordShareAccountUid: "",
-    webReplayDiscordShareHubIds: [],
-    uploadEnabled: false,
-    endpoint: DEFAULT_RAW_CAPTURE_ENDPOINT,
-    apiKey: "",
-    visibility: "private"
-  },
-  deckTrackerEnabled: false,
-  deckTrackerAutoStart: false,
-  deckTrackerSaveToReplay: false,
-  deckTrackerPerformanceMode: "balanced",
-  deckTrackerPinnedCards: {},
-  matchupPrepWidgetEnabled: true,
-  microphoneDeviceId: "",
-  gameZoomFactor: 1,
-  autoSaveAfterSeconds: 45,
-  overlaySessionStartedAt: "",
-  overlayDisplay: defaultOverlayDisplay(),
-  screenshotDirectory: "",
-  replayDirectory: "",
-  screenshotHotkey: "F9",
-  screenshotHotkeyEnabled: true,
-  scorepadDeviceId: "",
-  scorepadDeviceSecret: "",
-  scorepadLinkedAt: "",
-  activeDeckId: "",
-  activeHubs: [],
-  privateHubWebReplayGrantKeys: [],
-  activeTeams: []
-};
 
 function normalizeReplayVideoMode(_value: unknown): UserSettings["replayVideoMode"] {
   return "game-frame";
@@ -245,7 +157,7 @@ function normalizeReplayFolders(value: unknown): ReplayFolder[] {
   return normalized;
 }
 
-function normalizeRawCaptureSettings(value: unknown, fallback = DEFAULT_SETTINGS.rawCapture): UserSettings["rawCapture"] {
+function normalizeRawCaptureSettings(value: unknown, fallback = createDefaultSettings().rawCapture): UserSettings["rawCapture"] {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return fallback;
   }
@@ -309,7 +221,7 @@ function parseJsonToken<T>(token: string): T | undefined {
 
 function recoverSettingsFromCorruptJson(value: string): Partial<UserSettings> {
   const recovered: Record<string, unknown> = {};
-  const keys = Object.keys(DEFAULT_SETTINGS) as Array<keyof UserSettings>;
+  const keys = Object.keys(createDefaultSettings()) as Array<keyof UserSettings>;
   for (const key of keys) {
     if (key === "overlayDisplay" || key === "activeHubs" || key === "activeTeams") {
       continue;
@@ -365,6 +277,7 @@ export class RiftLiteStore {
   private matchesLoadPromise: Promise<MatchDraft[]> | null = null;
   private replaysCache: ReplayRecord[] | null = null;
   private replaysLoadPromise: Promise<ReplayRecord[]> | null = null;
+  private replaysCacheGeneration = 0;
   private lastDatabaseBackupAt = 0;
   private persistQueue: Promise<void> = Promise.resolve();
   private databaseOperationQueue: Promise<void> = Promise.resolve();
@@ -441,24 +354,25 @@ export class RiftLiteStore {
   }
 
   private normalizeSettings(parsed: Partial<UserSettings>): UserSettings {
+    const defaults = createDefaultSettings();
     return {
-      ...DEFAULT_SETTINGS,
+      ...defaults,
       ...parsed,
       defaultGamePlatform: normalizeDefaultGamePlatform((parsed as { defaultGamePlatform?: unknown }).defaultGamePlatform),
       homeDeckThemeEnabled: normalizeHomeDeckThemeEnabled((parsed as { homeDeckThemeEnabled?: unknown }).homeDeckThemeEnabled),
       replayVideoMode: normalizeReplayVideoMode((parsed as { replayVideoMode?: unknown }).replayVideoMode),
       replayFramePreset: normalizeReplayFramePreset((parsed as { replayFramePreset?: unknown }).replayFramePreset),
-      overlayDisplay: { ...DEFAULT_SETTINGS.overlayDisplay, ...parsed.overlayDisplay },
+      overlayDisplay: { ...defaults.overlayDisplay, ...parsed.overlayDisplay },
       replayCustomFlagTypes: Array.isArray(parsed.replayCustomFlagTypes)
         ? uniqueReplayCustomFlagTypes(parsed.replayCustomFlagTypes)
-        : DEFAULT_SETTINGS.replayCustomFlagTypes,
+        : defaults.replayCustomFlagTypes,
       replayFolders: normalizeReplayFolders(parsed.replayFolders),
       rawCapture: normalizeRawCaptureSettings((parsed as { rawCapture?: unknown }).rawCapture),
       deckTrackerPinnedCards: parsed.deckTrackerPinnedCards && typeof parsed.deckTrackerPinnedCards === "object" && !Array.isArray(parsed.deckTrackerPinnedCards)
         ? parsed.deckTrackerPinnedCards
         : {},
       activeHubs: stripLegacyHubSecrets({
-        ...DEFAULT_SETTINGS,
+        ...defaults,
         ...parsed,
         rawCapture: normalizeRawCaptureSettings((parsed as { rawCapture?: unknown }).rawCapture),
         activeHubs: Array.isArray(parsed.activeHubs) ? parsed.activeHubs : [],
@@ -1457,30 +1371,42 @@ export class RiftLiteStore {
     if (this.replaysLoadPromise) {
       return this.replaysLoadPromise;
     }
-    this.replaysLoadPromise = (async () => {
+    const generation = this.replaysCacheGeneration;
+    const loadPromise = (async () => {
       const db = await this.database();
       const result = db.exec("SELECT data_json FROM replays ORDER BY captured_at DESC");
       const storedReplays = (result[0]?.values ?? [])
         .map((row) => this.parseStoredReplayMetadata(row[0]))
         .filter((replay): replay is StoredReplayRecord => Boolean(replay));
       const replays = await mapWithConcurrency(storedReplays, 4, (stored) => this.hydrateStoredReplay(stored));
-      this.replaysCache = replays;
+      // A save or restore may commit while payload files are being hydrated.
+      // Its invalidation must outlive this older snapshot's completion.
+      if (generation === this.replaysCacheGeneration) {
+        this.replaysCache = replays;
+      }
       return replays;
     })();
+    this.replaysLoadPromise = loadPromise;
     try {
-      return await this.replaysLoadPromise;
+      return await loadPromise;
     } finally {
-      this.replaysLoadPromise = null;
+      if (this.replaysLoadPromise === loadPromise) {
+        this.replaysLoadPromise = null;
+      }
     }
   }
 
   private invalidateReplayCache(): void {
+    this.replaysCacheGeneration += 1;
     this.replaysCache = null;
     this.replaysLoadPromise = null;
   }
 
-  async exportBackupData(options: Partial<RiftLiteBackupOptions> = {}): Promise<RiftLiteBackupFile> {
+  async exportBackupData(
+    options: Partial<RiftLiteBackupOptions> & { includeReplays?: boolean } = {}
+  ): Promise<RiftLiteBackupFile> {
     const includeRecycleBin = options.includeRecycleBin !== false;
+    const includeReplays = options.includeReplays !== false;
     return sanitizeBackupFile({
       format: "riftlite.backup",
       version: 1,
@@ -1491,8 +1417,8 @@ export class RiftLiteStore {
       deletedMatches: includeRecycleBin ? await this.getDeletedMatches() : [],
       decks: await this.getSavedDecks(),
       notebooks: await this.getDeckNotebooks(),
-      replays: await this.getReplays(),
-      deletedReplays: includeRecycleBin ? await this.getDeletedReplays() : []
+      replays: includeReplays ? await this.getReplays() : [],
+      deletedReplays: includeReplays && includeRecycleBin ? await this.getDeletedReplays() : []
     });
   }
 
@@ -1896,7 +1822,7 @@ export class RiftLiteStore {
     if (!existing) {
       db.run("INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)", [
         "settings",
-        JSON.stringify(DEFAULT_SETTINGS),
+        JSON.stringify(createDefaultSettings()),
         Date.now()
       ]);
     }
@@ -1922,7 +1848,7 @@ export class RiftLiteStore {
       const raw = await readFile(this.legacyJsonPath, "utf8");
       const parsed = JSON.parse(raw) as PersistedState;
       if (parsed.settings) {
-        const migratedSettings = { ...DEFAULT_SETTINGS, ...parsed.settings };
+        const migratedSettings = { ...createDefaultSettings(), ...parsed.settings };
         db.run("INSERT OR REPLACE INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)", [
           "settings",
           JSON.stringify(migratedSettings),
@@ -2439,7 +2365,7 @@ export class RiftLiteStore {
     this.db = new this.sql.Database();
     this.settingsCache = null;
     this.matchesCache = null;
-    this.replaysCache = null;
+    this.invalidateReplayCache();
     this.migrateSchema();
     await this.migrateLegacyJson().catch(() => undefined);
     await this.migrateStoredPayloadsIfNeeded().catch(() => undefined);
@@ -2641,27 +2567,6 @@ export class RiftLiteStore {
     }
     return false;
   }
-}
-
-function defaultOverlayDisplay(): OverlayDisplayOptions {
-  return {
-    profile: "grind",
-    showBranding: true,
-    showWebsite: true,
-    showSession: true,
-    showLatestMatch: true,
-    showResult: true,
-    showOpponentName: true,
-    showScore: true,
-    showPlatform: true,
-    showDeck: true,
-    showLegendWinRate: true,
-    showMatchupWinRate: true,
-    showActiveDeckStats: false,
-    showDeckSessionStats: true,
-    showDeckMatchups: true,
-    showFooter: true
-  };
 }
 
 function readLegacySettings(db: Database): Record<string, string> {

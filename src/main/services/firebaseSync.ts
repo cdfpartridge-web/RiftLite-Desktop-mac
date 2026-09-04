@@ -3307,7 +3307,7 @@ export class FirebaseSyncService {
   }
 
   private async buildAccountCloudBackup(settings: UserSettings): Promise<RiftLiteBackupFile> {
-    const backup = await this.store.exportBackupData({ includeRecycleBin: false });
+    const backup = await this.store.exportBackupData({ includeRecycleBin: false, includeReplays: false });
     const safeSettings: UserSettings = {
       ...backup.settings,
       firebaseUid: "",

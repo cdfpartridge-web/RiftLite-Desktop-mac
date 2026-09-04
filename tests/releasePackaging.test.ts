@@ -115,7 +115,10 @@ describe("release packaging continuity", () => {
       owner: "cdfpartridge-web",
       repo: "RiftLite-Desktop-Mac"
     }]);
-  });
+    // Loading electron-builder's real config graph competes with the complete
+    // parallel suite on Windows. Keep its assertions intact and scope the
+    // integration timeout here; ordinary unit tests retain the default limit.
+  }, 20_000);
 
   it("verifies every Mac release boundary before artifacts can be uploaded", () => {
     const workflow = readFileSync(resolve(projectDirectory, ".github", "workflows", "build-mac.yml"), "utf8");

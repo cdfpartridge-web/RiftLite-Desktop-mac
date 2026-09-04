@@ -1,4 +1,7 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { createDefaultSettings } from "../shared/settingsDefaults";
+import { useReplayVoicePlayback } from "./useReplayVoicePlayback";
+import { useOwnedPointerGesture } from "./useOwnedPointerGesture";
 import { createRoot } from "react-dom/client";
 import QRCode from "qrcode";
 import {
@@ -485,108 +488,9 @@ const EMPTY_ATLAS_KNOWN_OPPONENT_HAND: AtlasKnownOpponentHandState = {
 };
 
 const FALLBACK_BOOT_SETTINGS: UserSettings = {
-  username: "",
+  ...createDefaultSettings(),
   firstRunComplete: true,
-  lastSeenVersion: RIFTLITE_BUILD_IDENTITY.displayVersion,
-  defaultGamePlatform: "tcga",
-  homeDeckThemeEnabled: false,
-  syncMode: "community-and-hubs",
-  communitySyncEnabled: true,
-  firebaseUid: "",
-  firebaseRefreshToken: "",
-  firebaseCredentialGeneration: "",
-  accountUid: "",
-  accountEmail: "",
-  accountHandle: "",
-  accountDisplayName: "",
-  accountProfilePublic: false,
-  accountLastVerifiedAt: "",
-  accountLastVerificationError: "",
-  accountCloudSyncEnabled: false,
-  accountCloudSyncLastSyncedAt: "",
-  accountCloudSyncLastRestoredAt: "",
-  accountCloudSyncDeviceId: "",
-  accountCloudSyncDeviceName: "",
-  accountCloudSyncRemoteGenerationId: "",
-  accountCloudSyncLastError: "",
-  anonymousDiagnosticsEnabled: true,
-  anonymousInstallId: "",
-  anonymousInstallCreatedAt: "",
-  anonymousUsageLastHeartbeatAt: "",
-  anonymousUsageLastHeartbeatVersion: "",
-  enhancedInsightsEnabled: false,
-  enhancedInsightsIntroSeen: false,
-  enhancedInsightsPostGamePromptEnabled: true,
-  debugMode: false,
-  confirmationEnabled: true,
-  replayCaptureEnabled: true,
-  replayKeyframesEnabled: true,
-  replayFramePreset: "standard",
-  replayVideoEnabled: true,
-  replayVideoMode: "game-frame",
-  replayVideoQuality: "sharp",
-  replayMicAudioEnabled: false,
-  replayCustomFlagTypes: ["Mistake Consequence", "Question", "Alternative Line"],
-  replayFolders: [],
-  replayShadowClipEnabled: false,
-  replayShadowClipSeconds: 60,
-  replayShadowClipHotkey: "CommandOrControl+Shift+C",
-  replayShadowClipHotkeyEnabled: true,
-  replayQuickFlagHotkey: "CommandOrControl+Shift+F",
-  replayQuickFlagHotkeyEnabled: true,
-  rawCapture: {
-    enabled: false,
-    webReplayAutoUploadEnabled: false,
-    webReplayAutoUploadAccountUid: "",
-    tcgaWebReplayAutoUploadEnabled: false,
-    tcgaWebReplayAutoUploadAccountUid: "",
-    webReplayDiscordShareEnabled: false,
-    webReplayDiscordShareAccountUid: "",
-    webReplayDiscordShareHubIds: [],
-    uploadEnabled: false,
-    endpoint: "https://riftreplay.com/api/v1/replays",
-    apiKey: "",
-    visibility: "private"
-  },
-  deckTrackerEnabled: false,
-  deckTrackerAutoStart: false,
-  deckTrackerSaveToReplay: false,
-  deckTrackerPerformanceMode: "balanced",
-  deckTrackerPinnedCards: {},
-  matchupPrepWidgetEnabled: true,
-  microphoneDeviceId: "",
-  gameZoomFactor: 1,
-  autoSaveAfterSeconds: 45,
-  overlaySessionStartedAt: "",
-  overlayDisplay: {
-    profile: "grind",
-    showBranding: true,
-    showWebsite: true,
-    showSession: true,
-    showLatestMatch: true,
-    showResult: true,
-    showOpponentName: true,
-    showScore: true,
-    showPlatform: true,
-    showDeck: true,
-    showLegendWinRate: true,
-    showMatchupWinRate: true,
-    showActiveDeckStats: false,
-    showDeckSessionStats: true,
-    showDeckMatchups: true,
-    showFooter: true
-  },
-  screenshotDirectory: "",
-  replayDirectory: "",
-  screenshotHotkey: "F9",
-  screenshotHotkeyEnabled: true,
-  scorepadDeviceId: "",
-  scorepadDeviceSecret: "",
-  scorepadLinkedAt: "",
-  activeDeckId: "",
-  privateHubWebReplayGrantKeys: [],
-  activeHubs: [],
-  activeTeams: []
+  lastSeenVersion: RIFTLITE_BUILD_IDENTITY.displayVersion
 };
 
 const APP_VERSION_META = RIFTLITE_BUILD_IDENTITY.displayVersion;
@@ -8822,6 +8726,7 @@ function DeckTrackerOverlay({
   const positionRef = useRef(position);
   const sizeRef = useRef(size);
   const suppressNextClickRef = useRef(false);
+  const { start: startPointerGesture, cancel: cancelOwnedPointerGesture } = useOwnedPointerGesture();
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -8935,11 +8840,12 @@ function DeckTrackerOverlay({
     sizeRef.current = size;
   }, [size]);
 
-  useEffect(() => {
-    return () => {
-      document.body.classList.remove("floating-panel-moving");
-    };
-  }, []);
+  function cancelPointerGesture() {
+    dragRef.current = null;
+    resizeRef.current = null;
+    setDragging(false);
+    document.body.classList.remove("floating-panel-moving");
+  }
 
   function clampPosition(next: FloatingDeckTrackerPosition): FloatingDeckTrackerPosition {
     const parent = overlayRef.current?.parentElement;
@@ -8977,11 +8883,11 @@ function DeckTrackerOverlay({
     if (!draggingPill && targetElement?.closest("button, input, textarea, select, a, .floating-resize-handle")) {
       return;
     }
+    cancelOwnedPointerGesture();
     event.preventDefault();
     event.stopPropagation();
     window.getSelection()?.removeAllRanges();
     document.body.classList.add("floating-panel-moving");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     const target = event.currentTarget;
     dragRef.current = {
       pointerId: event.pointerId,
@@ -9013,10 +8919,6 @@ function DeckTrackerOverlay({
         return;
       }
       nativeEvent.preventDefault();
-      target.releasePointerCapture?.(nativeEvent.pointerId);
-      window.removeEventListener("pointermove", onMove, true);
-      window.removeEventListener("pointerup", onEnd, true);
-      window.removeEventListener("pointercancel", onEnd, true);
       dragRef.current = null;
       setDragging(false);
       document.body.classList.remove("floating-panel-moving");
@@ -9031,20 +8933,18 @@ function DeckTrackerOverlay({
         }, 0);
       }
     };
-    window.addEventListener("pointermove", onMove, true);
-    window.addEventListener("pointerup", onEnd, true);
-    window.addEventListener("pointercancel", onEnd, true);
+    startPointerGesture({ target, pointerId: event.pointerId, onMove, onEnd, onCancel: cancelPointerGesture });
   }
 
   function startResize(event: React.PointerEvent<HTMLElement>) {
     if (event.button !== 0) {
       return;
     }
+    cancelOwnedPointerGesture();
     event.preventDefault();
     event.stopPropagation();
     window.getSelection()?.removeAllRanges();
     document.body.classList.add("floating-panel-moving");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     const target = event.currentTarget;
     resizeRef.current = {
       pointerId: event.pointerId,
@@ -9073,10 +8973,6 @@ function DeckTrackerOverlay({
         return;
       }
       nativeEvent.preventDefault();
-      target.releasePointerCapture?.(nativeEvent.pointerId);
-      window.removeEventListener("pointermove", onMove, true);
-      window.removeEventListener("pointerup", onEnd, true);
-      window.removeEventListener("pointercancel", onEnd, true);
       resizeRef.current = null;
       setDragging(false);
       document.body.classList.remove("floating-panel-moving");
@@ -9085,9 +8981,7 @@ function DeckTrackerOverlay({
       sizeRef.current = next;
       saveDeckTrackerSize(next);
     };
-    window.addEventListener("pointermove", onMove, true);
-    window.addEventListener("pointerup", onEnd, true);
-    window.addEventListener("pointercancel", onEnd, true);
+    startPointerGesture({ target, pointerId: event.pointerId, onMove, onEnd, onCancel: cancelPointerGesture });
   }
 
   function openFromPill(event: React.MouseEvent<HTMLButtonElement>) {
@@ -20589,16 +20483,18 @@ function MatchupPrepOverlay({ deck, notebook, opponentLegend, sideboardSuggested
     origin: FloatingPrepSize;
   } | null>(null);
   const suppressNextClickRef = useRef(false);
+  const { start: startPointerGesture, cancel: cancelOwnedPointerGesture } = useOwnedPointerGesture();
   const targetLegend = manualLegend === "default" ? "" : normalizeLegendName(manualLegend || opponentLegend);
   const resolved = useMemo(() => resolveDeckMatchupGuide(notebook, targetLegend), [notebook, targetLegend]);
   const guide = resolved.guide;
 
-  useEffect(() => {
-    return () => {
-      document.body.classList.remove("matchup-prep-dragging");
-      document.body.classList.remove("floating-panel-moving");
-    };
-  }, []);
+  function cancelPointerGesture() {
+    dragRef.current = null;
+    resizeRef.current = null;
+    setDragging(false);
+    document.body.classList.remove("matchup-prep-dragging");
+    document.body.classList.remove("floating-panel-moving");
+  }
 
   useEffect(() => {
     positionRef.current = position;
@@ -20669,12 +20565,12 @@ function MatchupPrepOverlay({ deck, notebook, opponentLegend, sideboardSuggested
     if (event.button !== 0) {
       return;
     }
+    cancelOwnedPointerGesture();
     event.preventDefault();
     event.stopPropagation();
     clearPrepSelection();
     document.body.classList.add("matchup-prep-dragging");
     document.body.classList.add("floating-panel-moving");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     const target = event.currentTarget;
     dragRef.current = {
       pointerId: event.pointerId,
@@ -20710,10 +20606,6 @@ function MatchupPrepOverlay({ deck, notebook, opponentLegend, sideboardSuggested
       clearPrepSelection();
       const shouldOpenPill = !open && !hidden && !drag.moved && target.classList.contains("matchup-prep-pill");
       const shouldRestorePrep = hidden && !drag.moved && target.classList.contains("matchup-prep-restore");
-      target.releasePointerCapture?.(nativeEvent.pointerId);
-      window.removeEventListener("pointermove", onMove, true);
-      window.removeEventListener("pointerup", onEnd, true);
-      window.removeEventListener("pointercancel", onEnd, true);
       dragRef.current = null;
       setDragging(false);
       document.body.classList.remove("matchup-prep-dragging");
@@ -20733,20 +20625,18 @@ function MatchupPrepOverlay({ deck, notebook, opponentLegend, sideboardSuggested
         showPrep();
       }
     };
-    window.addEventListener("pointermove", onMove, true);
-    window.addEventListener("pointerup", onEnd, true);
-    window.addEventListener("pointercancel", onEnd, true);
+    startPointerGesture({ target, pointerId: event.pointerId, onMove, onEnd, onCancel: cancelPointerGesture });
   }
 
   function startResize(event: React.PointerEvent<HTMLElement>) {
     if (event.button !== 0) {
       return;
     }
+    cancelOwnedPointerGesture();
     event.preventDefault();
     event.stopPropagation();
     clearPrepSelection();
     document.body.classList.add("floating-panel-moving");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     const target = event.currentTarget;
     resizeRef.current = {
       pointerId: event.pointerId,
@@ -20777,10 +20667,6 @@ function MatchupPrepOverlay({ deck, notebook, opponentLegend, sideboardSuggested
       }
       nativeEvent.preventDefault();
       clearPrepSelection();
-      target.releasePointerCapture?.(nativeEvent.pointerId);
-      window.removeEventListener("pointermove", onMove, true);
-      window.removeEventListener("pointerup", onEnd, true);
-      window.removeEventListener("pointercancel", onEnd, true);
       resizeRef.current = null;
       setDragging(false);
       document.body.classList.remove("floating-panel-moving");
@@ -20789,9 +20675,7 @@ function MatchupPrepOverlay({ deck, notebook, opponentLegend, sideboardSuggested
       sizeRef.current = next;
       saveMatchupPrepSize(next);
     };
-    window.addEventListener("pointermove", onMove, true);
-    window.addEventListener("pointerup", onEnd, true);
-    window.addEventListener("pointercancel", onEnd, true);
+    startPointerGesture({ target, pointerId: event.pointerId, onMove, onEnd, onCancel: cancelPointerGesture });
   }
 
   function openFromPill(event: React.MouseEvent<HTMLButtonElement>) {
@@ -25204,7 +25088,6 @@ function ReplayVideoPlayer({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoStageRef = useRef<HTMLDivElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const voiceRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceRecorderCleanupRef = useRef<(() => void) | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
@@ -25216,7 +25099,6 @@ function ReplayVideoPlayer({
   const voiceStartPendingRef = useRef(false);
   const voiceSaveRequestRef = useRef(0);
   const voiceSavingRef = useRef(false);
-  const voicePlaybackTimerRef = useRef<number | null>(null);
   const lastTimeUpdateRef = useRef(0);
   const visibleAnnotationsRef = useRef<ReplayAnnotation[]>([]);
   const presentationRecorderRef = useRef<MediaRecorder | null>(null);
@@ -25252,14 +25134,15 @@ function ReplayVideoPlayer({
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [activeClipId, setActiveClipId] = useState<string | undefined>();
   const [activeClipStartedAt, setActiveClipStartedAt] = useState<number | undefined>();
-  const [playbackClipId, setPlaybackClipId] = useState<string | undefined>();
-  const [playbackOffsetMs, setPlaybackOffsetMs] = useState(0);
-  const [voicePlaybackPaused, setVoicePlaybackPaused] = useState(false);
   const [replayAudioVolume, setReplayAudioVolume] = useState(0.9);
   const [replayAudioMuted, setReplayAudioMuted] = useState(false);
   const [videoFullscreen, setVideoFullscreen] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState<(typeof REPLAY_PLAYBACK_RATES)[number]>(1);
+  const voicePlayback = useReplayVoicePlayback((operation) => {
+    setStatus(operation === "resume" ? "Could not resume voice note." : "Could not play voice note.");
+  }, replayId);
+  const { clipId: playbackClipId, offsetMs: playbackOffsetMs, paused: voicePlaybackPaused } = voicePlayback;
   const sortedFlags = [...flags].sort((a, b) => (a.timeMs ?? 0) - (b.timeMs ?? 0));
   const currentAnnotationTarget = `${video.path || video.url}:${Math.round(currentMs / 1000)}`;
   const visibleAnnotations = annotations.filter((annotation) =>
@@ -25362,10 +25245,6 @@ function ReplayVideoPlayer({
       voiceChunksRef.current = [];
       voiceRecorderCleanupRef.current?.();
       voiceRecorderCleanupRef.current = null;
-      audioRef.current?.pause();
-      if (voicePlaybackTimerRef.current) {
-        window.clearInterval(voicePlaybackTimerRef.current);
-      }
       void window.riftlite.setWindowFullscreen(false).catch(() => undefined);
     };
   }, []);
@@ -25393,14 +25272,12 @@ function ReplayVideoPlayer({
   }, [seekToMs, onSeekHandled]);
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = replayAudioMuted ? 0 : replayAudioVolume;
-    }
+    voicePlayback.setVolume(replayAudioMuted ? 0 : replayAudioVolume);
     if (videoRef.current) {
       videoRef.current.volume = replayAudioVolume;
       videoRef.current.muted = replayAudioMuted;
     }
-  }, [replayAudioMuted, replayAudioVolume]);
+  }, [replayAudioMuted, replayAudioVolume, voicePlayback.setVolume, replayId]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -25902,73 +25779,27 @@ function ReplayVideoPlayer({
     setStatus(`Saved keyframe at ${formatDuration(currentMs)}.`);
   }
 
-  function startVoicePlaybackTimer() {
-    if (voicePlaybackTimerRef.current) {
-      window.clearInterval(voicePlaybackTimerRef.current);
-    }
-    voicePlaybackTimerRef.current = window.setInterval(() => {
-      setPlaybackOffsetMs(Math.round((audioRef.current?.currentTime ?? 0) * 1000));
-    }, 80);
-  }
-
   function stopVoicePlayback() {
-    if (voicePlaybackTimerRef.current) {
-      window.clearInterval(voicePlaybackTimerRef.current);
-      voicePlaybackTimerRef.current = null;
-    }
-    audioRef.current?.pause();
-    setPlaybackClipId(undefined);
-    setPlaybackOffsetMs(0);
-    setVoicePlaybackPaused(false);
+    voicePlayback.stop();
   }
 
   function playVoiceNote(note: ReplayVoiceNote, flag?: ReplayFlag) {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-    stopVoicePlayback();
-    audioRef.current.pause();
-    audioRef.current.src = note.dataUrl;
-    audioRef.current.currentTime = 0;
-    audioRef.current.volume = replayAudioMuted ? 0 : replayAudioVolume;
     if (videoRef.current && typeof flag?.timeMs === "number") {
       videoRef.current.currentTime = Math.max(0, flag.timeMs / 1000);
       setCurrentMs(flag.timeMs);
       videoRef.current.pause();
     }
-    setPlaybackClipId(note.id);
-    setPlaybackOffsetMs(0);
-    setVoicePlaybackPaused(false);
-    startVoicePlaybackTimer();
-    audioRef.current.onended = () => stopVoicePlayback();
-    audioRef.current.onpause = () => {
-      if (audioRef.current?.ended) {
-        stopVoicePlayback();
-      }
-    };
-    void audioRef.current.play().catch(() => setStatus("Could not play voice note."));
+    voicePlayback.play(note, replayAudioMuted ? 0 : replayAudioVolume);
   }
 
   function pauseVoicePlayback() {
-    if (!audioRef.current || !playbackClipId) {
-      return;
-    }
-    audioRef.current.pause();
-    if (voicePlaybackTimerRef.current) {
-      window.clearInterval(voicePlaybackTimerRef.current);
-      voicePlaybackTimerRef.current = null;
-    }
-    setVoicePlaybackPaused(true);
+    if (!playbackClipId) return;
+    voicePlayback.pause();
     setStatus(`Voice note paused at ${formatDuration(playbackOffsetMs)}.`);
   }
 
   function resumeVoicePlayback() {
-    if (!audioRef.current || !playbackClipId) {
-      return;
-    }
-    startVoicePlaybackTimer();
-    setVoicePlaybackPaused(false);
-    void audioRef.current.play().catch(() => setStatus("Could not resume voice note."));
+    if (playbackClipId) voicePlayback.resume();
   }
 
   async function toggleVideoFullscreen(force?: boolean) {
@@ -26907,10 +26738,9 @@ function ReplaySlideshow({
   const [trimStartIndex, setTrimStartIndex] = useState(0);
   const [trimEndIndex, setTrimEndIndex] = useState(Math.max(0, screenshots.length - 1));
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
-  const [playbackClipId, setPlaybackClipId] = useState<string | undefined>();
-  const [playbackOffsetMs, setPlaybackOffsetMs] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const voicePlaybackTimerRef = useRef<number | null>(null);
+  const [voicePlaybackStatus, setVoicePlaybackStatus] = useState("");
+  const voicePlayback = useReplayVoicePlayback(() => setVoicePlaybackStatus("Could not play voice note."));
+  const { clipId: playbackClipId, offsetMs: playbackOffsetMs } = voicePlayback;
 
   useEffect(() => {
     setIndex(Math.min(initialIndex, Math.max(0, screenshots.length - 1)));
@@ -26934,13 +26764,6 @@ function ReplaySlideshow({
     }, replayFrameDelay(current, next, Number.parseFloat(speed) || 1));
     return () => window.clearTimeout(timer);
   }, [index, playing, screenshots, speed]);
-
-  useEffect(() => () => {
-    audioRef.current?.pause();
-    if (voicePlaybackTimerRef.current) {
-      window.clearInterval(voicePlaybackTimerRef.current);
-    }
-  }, []);
 
   if (!screenshots.length) {
     return null;
@@ -27001,29 +26824,9 @@ function ReplaySlideshow({
     setIndex(frameIndex);
     setContextMenu({ ...replayContextMenuPosition(event.clientX, event.clientY), index: frameIndex });
   };
-  const stopFrameVoicePlayback = () => {
-    if (voicePlaybackTimerRef.current) {
-      window.clearInterval(voicePlaybackTimerRef.current);
-      voicePlaybackTimerRef.current = null;
-    }
-    setPlaybackClipId(undefined);
-    setPlaybackOffsetMs(0);
-  };
   const playFrameVoice = (note: ReplayVoiceNote) => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-    stopFrameVoicePlayback();
-    audioRef.current.pause();
-    audioRef.current.src = note.dataUrl;
-    audioRef.current.currentTime = 0;
-    setPlaybackClipId(note.id);
-    setPlaybackOffsetMs(0);
-    voicePlaybackTimerRef.current = window.setInterval(() => {
-      setPlaybackOffsetMs(Math.round((audioRef.current?.currentTime ?? 0) * 1000));
-    }, 80);
-    audioRef.current.onended = () => stopFrameVoicePlayback();
-    void audioRef.current.play();
+    setVoicePlaybackStatus("");
+    voicePlayback.play(note);
   };
 
   return (
@@ -27102,6 +26905,7 @@ function ReplaySlideshow({
             <option value="8">8x</option>
           </select>
         </div>
+        {voicePlaybackStatus ? <p className="replay-coaching-status" role="status">{voicePlaybackStatus}</p> : null}
         {currentFlags.length ? (
           <div className="replay-frame-marker-row">
             {currentFlags.map((flag) => {

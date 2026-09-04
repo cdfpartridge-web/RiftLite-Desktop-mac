@@ -1,5 +1,68 @@
 export type AtlasLobbyPlayerFieldState = "ready" | "collapsed" | "unavailable" | "blocked";
 
+const ATLAS_ORIGIN = "https://play.riftatlas.com";
+
+/*
+ * This is a deliberately narrow fallback for Chromium's zero-sized first row
+ * in Atlas's otherwise healthy lobby side panel. The ordinary Atlas
+ * compatibility stylesheet is installed before this repair runs, so repeating
+ * those broad container rules is not a recovery. Switch only Atlas's known
+ * structural `contents` wrapper to a distinct formatting context, then give
+ * the expected name section and its existing 44px control enough geometry to
+ * participate in the grid again. Never override visibility, field display,
+ * positioning or pointer events.
+ */
+const ATLAS_LOBBY_PLAYER_FIELD_REPAIR_CSS = `
+.hub-theme > .contents:has(.lobby-entry-panel #right-rail-player-name) {
+  display: flow-root !important;
+  min-block-size: 100dvh !important;
+}
+
+.hub-theme .lobby-content-column:has(.lobby-entry-panel #right-rail-player-name) {
+  contain: none !important;
+  container-name: none !important;
+  container-type: normal !important;
+}
+
+.hub-theme :has(> .lobby-content-column .lobby-entry-panel #right-rail-player-name) {
+  container: lobby-content / inline-size !important;
+}
+
+.lobby-entry-panel:has(#right-rail-player-name) > section:has(#right-rail-player-name) {
+  inline-size: 100% !important;
+  min-block-size: 5.75rem !important;
+}
+
+.lobby-entry-panel:has(#right-rail-player-name) > section:has(#right-rail-player-name) > .relative:has(> #right-rail-player-name) {
+  inline-size: 100% !important;
+  min-block-size: 2.75rem !important;
+}
+
+.lobby-entry-panel #right-rail-player-name {
+  inline-size: 100% !important;
+  min-block-size: 2.75rem !important;
+}
+
+.lobby-entry-panel:has(#right-rail-player-name) > :has(.lobby-quick-match-actions):has(.lobby-private-play-actions) {
+  inline-size: 100% !important;
+  min-block-size: 1px !important;
+}
+`.trim();
+
+export function atlasLobbyPlayerFieldRepairCssForUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    const pathname = url.pathname
+      .replace(/^\/[a-z]{2}(?:-[a-z]{2})?(?=\/|$)/i, "")
+      .replace(/\/+$/, "") || "/";
+    return url.origin === ATLAS_ORIGIN && (pathname === "/" || pathname === "/lobby")
+      ? ATLAS_LOBBY_PLAYER_FIELD_REPAIR_CSS
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Reads layout only. Keep this function self-contained: the main process also
  * serializes it into Atlas's guest, without this module or any imported helper.

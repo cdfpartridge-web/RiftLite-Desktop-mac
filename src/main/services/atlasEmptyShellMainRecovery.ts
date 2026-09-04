@@ -49,6 +49,20 @@ export class AtlasEmptyShellMainRecoveryGuard {
   private attempt: RecoveryAttemptState = { status: "idle" };
   private nextRecoveryId = 0;
 
+  /**
+   * Cancel delayed work without replacing the committed URL. A blocked link
+   * never produces a commit, so recording its target here would permanently
+   * reject subsequent shell/auth reports from the surviving lobby.
+   */
+  navigationStarted(guestId: number): void {
+    const current = this.guestNavigations.get(guestId);
+    if (!current) return;
+    this.beginNavigation(guestId, current.url);
+    if (this.attempt.status === "scheduled" && this.attempt.guestId === guestId) {
+      this.attempt = { status: "idle" };
+    }
+  }
+
   beginNavigation(guestId: number, url: string): string {
     const previous = this.guestNavigations.get(guestId);
     const generation = (previous?.generation ?? 0) + 1;
