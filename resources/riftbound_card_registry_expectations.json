@@ -94,15 +94,16 @@
       ]
     },
     "VEN": {
-      "minUniquePrints": 226,
+      "minUniquePrints": 237,
       "minTypeCounts": {
         "Battlefield": 10,
-        "Legend": 18,
+        "Legend": 27,
         "Rune": 6
       },
       "minVariantCounts": {
         "alternateArt": 15,
-        "overnumbered": 9
+        "overnumbered": 9,
+        "signature": 9
       },
       "requiredPrintIds": [
         "VEN-139",
@@ -132,7 +133,16 @@
         "VEN-194",
         "VEN-195",
         "VEN-196",
-        "VEN-197"
+        "VEN-197",
+        "VEN-189*",
+        "VEN-190*",
+        "VEN-191*",
+        "VEN-192*",
+        "VEN-193*",
+        "VEN-194*",
+        "VEN-195*",
+        "VEN-196*",
+        "VEN-197*"
       ]
     }
   }

@@ -1,4 +1,5 @@
 import { GAME_WEBVIEW_PARTITIONS } from "./gameWebview.js";
+import { isAtlasDeckPageUrl, isAtlasDeckWorkflowUrl } from "./atlasDeckNavigation.js";
 import type { GamePlatform } from "./types.js";
 
 export type EmbeddedWebviewPolicy =
@@ -193,6 +194,20 @@ export function isSecurePopupNavigation(value: string): boolean {
   return Boolean(url && (usesDefaultHttpsPort(url) || url.toString() === "about:blank"));
 }
 
+/** Deck copy/export can write text without granting the editor game/capture trust. */
+export function isAllowedEmbeddedPermission(
+  policy: EmbeddedWebviewPolicy,
+  value: string,
+  permission: string,
+  allowedPermissions: ReadonlySet<string>
+): boolean {
+  return allowedPermissions.has(permission) && (
+    isAllowedEmbeddedNavigation(policy, value) ||
+    (policy.kind === "game" && policy.platform === "atlas" &&
+      permission === "clipboard-sanitized-write" && isAtlasDeckPageUrl(value))
+  );
+}
+
 const ATLAS_OAUTH_ORIGINS = new Set([
   "https://accounts.google.com",
   "https://accounts.riftatlas.com",
@@ -215,7 +230,8 @@ export function isAllowedGamePopupNavigation(
   policy: Extract<EmbeddedWebviewPolicy, { kind: "game" }>,
   value: string
 ): boolean {
-  if (value === "about:blank" || isAllowedEmbeddedNavigation(policy, value)) {
+  if (value === "about:blank" || isAllowedEmbeddedNavigation(policy, value) ||
+    (policy.platform === "atlas" && isAtlasDeckWorkflowUrl(value))) {
     return true;
   }
   const url = parsedUrl(value);
@@ -234,7 +250,8 @@ export function isAllowedGameMainFrameNavigation(
   policy: Extract<EmbeddedWebviewPolicy, { kind: "game" }>,
   value: string
 ): boolean {
-  if (isAllowedEmbeddedNavigation(policy, value)) {
+  if (isAllowedEmbeddedNavigation(policy, value) ||
+    (policy.platform === "atlas" && isAtlasDeckWorkflowUrl(value))) {
     return true;
   }
   const url = parsedUrl(value);

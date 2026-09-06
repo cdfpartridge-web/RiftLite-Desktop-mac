@@ -74,9 +74,9 @@ describe("replay MP4 overlay rasterizer", () => {
 
   it("connects MP4 export to the Chromium rasterizer and never silently skips render failures", () => {
     const writeStart = mainSource.indexOf("async function writeReplayMp4OverlayPng");
-    const writeEnd = mainSource.indexOf("function replayMp4AnnotationTimeMs", writeStart);
+    const writeEnd = mainSource.indexOf("async function replayMp4OverlayInputs", writeStart);
     const overlayStart = mainSource.indexOf("async function replayMp4OverlayInputs");
-    const overlayEnd = mainSource.indexOf("function replayMp4VoiceNoteDelayMs", overlayStart);
+    const overlayEnd = mainSource.indexOf("function replayVoiceNoteExtension", overlayStart);
     const writer = mainSource.slice(writeStart, writeEnd);
     const overlays = mainSource.slice(overlayStart, overlayEnd);
 

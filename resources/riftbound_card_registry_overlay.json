@@ -1,11 +1,271 @@
 {
   "schemaVersion": 1,
   "imageHashAliasesByPrintId": {
+    "VEN-096": ["2874318b39f1dd9d1bf2ed21203795688b788413"],
     "VEN-163": [
       "e41bc5d29f91f652d553bef56e2c84e95010ef1a"
     ]
   },
   "cards": [
+    {
+      "printId": "VEN-096",
+      "name": "Shadowblade Lurker",
+      "type": "Unit",
+      "supertype": null,
+      "costEnergy": 5,
+      "costPower": null,
+      "tags": [
+        "Ionia"
+      ],
+      "champion": null,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f42e9286c968db8cd37fb2911617b8c78de7d516-744x1040.png?accountingTag=RB",
+      "artist": "Six More Vodka",
+      "updatedAt": "2026-07-14T21:35:29.092Z",
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": false
+      },
+      "aliases": [],
+      "sourceIds": [
+        "official-gallery:ven-096-166"
+      ]
+    },
+    {
+      "printId": "VEN-189*",
+      "name": "Akali, Rogue Assassin",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Akali",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d8262e7b24f26d1c9a18b13166d009aaf573e059-744x1039.png?accountingTag=RB",
+      "artist": "Jessica Oyhenart",
+      "aliases": [
+        "Akali - Rogue Assassin",
+        "Rogue Assassin"
+      ],
+      "tags": [
+        "Akali"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-189-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-190*",
+      "name": "Renekton, Butcher of the Sands",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Renekton",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b9270494d2c18525e766b2ffa23a7c99ad9f994f-744x1039.png?accountingTag=RB",
+      "artist": "Edgardo Monteon",
+      "aliases": [
+        "Renekton - Butcher of the Sands",
+        "Butcher of the Sands"
+      ],
+      "tags": [
+        "Renekton"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-190-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-191*",
+      "name": "Zed, Master of Shadows",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Zed",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a88733f8062c18a7aa51a208b1aef5d0bd030007-744x1039.png?accountingTag=RB",
+      "artist": "Yh Shen",
+      "aliases": [
+        "Master of Shadows",
+        "Zed - Master of Shadows"
+      ],
+      "tags": [
+        "Zed"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-191-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-192*",
+      "name": "Nasus, Curator of the Sands",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Nasus",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/964b5f9718a6648add68d894505e69bd2c5d071a-744x1039.png?accountingTag=RB",
+      "artist": "Sean Budanio",
+      "aliases": [
+        "Nasus - Curator of the Sands",
+        "Curator of the Sands"
+      ],
+      "tags": [
+        "Nasus"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-192-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-193*",
+      "name": "Shen, Eye of Twilight",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Shen",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1f60702c09f95d2a2af0176c77166092cb8cf6fa-744x1039.png?accountingTag=RB",
+      "artist": "Oscar Vega",
+      "aliases": [
+        "Eye of Twilight",
+        "Shen - Eye of Twilight"
+      ],
+      "tags": [
+        "Shen"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-193-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-194*",
+      "name": "Jayce, Defender of Tomorrow",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Jayce",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3092eec0739ac28d36e22c3ee005feb75980d001-744x1039.png?accountingTag=RB",
+      "artist": "Stella Chen Yui",
+      "aliases": [
+        "Defender of Tomorrow"
+      ],
+      "tags": [
+        "Jayce"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-194-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-195*",
+      "name": "Mel, Soul's Reflection",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Mel",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/174a22326c894454cb5878f4ce3603d43f9e599f-744x1040.png?accountingTag=RB",
+      "artist": "Envar Studio",
+      "aliases": [
+        "Mel - Soul's Reflection",
+        "Soul's Reflection"
+      ],
+      "tags": [
+        "Mel"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-195-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-196*",
+      "name": "Ambessa, Matriarch of War",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Ambessa",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/844b4dd1ae4803abf61b42d53af2b4969e594332-744x1039.png?accountingTag=RB",
+      "artist": "Aliya Chen",
+      "aliases": [
+        "Ambessa - Matriarch of War",
+        "Matriarch of War"
+      ],
+      "tags": [
+        "Ambessa"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-196-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
+    {
+      "printId": "VEN-197*",
+      "name": "Kennen, Heart of the Tempest",
+      "type": "Legend",
+      "supertype": null,
+      "costEnergy": null,
+      "costPower": null,
+      "champion": "Kennen",
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/853681913bcd2a2e2b42217e290b530b72518142-744x1039.png?accountingTag=RB",
+      "artist": "Shop Sun",
+      "aliases": [
+        "Yordle, Kennen - Heart of the Tempest",
+        "Yordle, Kennen, Heart of the Tempest",
+        "Heart of the Tempest"
+      ],
+      "tags": [
+        "Yordle",
+        "Kennen"
+      ],
+      "sourceIds": [
+        "official-gallery:ven-197-star-166"
+      ],
+      "variants": {
+        "alternateArt": false,
+        "overnumbered": false,
+        "signature": true
+      }
+    },
     {
       "printId": "UNL-T01",
       "name": "Baron Pit",

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import registryData from "../resources/riftbound_card_registry.json";
+import expectations from "../resources/riftbound_card_registry_expectations.json";
 import {
   dedupeCards,
   mergeRegistryOverlay,
@@ -31,6 +33,16 @@ function sourceCard(overrides: Record<string, unknown> = {}) {
 }
 
 describe("RiftCodex registry generator", () => {
+  it("rejects a refreshed catalogue that loses any required Vendetta signature print", () => {
+    expect(() => validateRegistry(registryData.cards, expectations, registryData.specialBattlefields)).not.toThrow();
+    for (let number = 189; number <= 197; number += 1) {
+      const missingId = `VEN-${number}*`;
+      const incomplete = registryData.cards.filter((card) => card.printId !== missingId);
+      expect(() => validateRegistry(incomplete, expectations, registryData.specialBattlefields))
+        .toThrow(`Missing required VEN print id: ${missingId}`);
+    }
+  });
+
   it("preserves signed, art-suffix, rune, token, and promo print identities", () => {
     expect(normalizePrintId("unl-226*-219")).toMatchObject({
       printId: "UNL-226*",

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 const appSource = readFileSync(new URL("../src/renderer/App.tsx", import.meta.url), "utf8");
 const hubSource = readFileSync(new URL("../src/renderer/InsightsHubView.tsx", import.meta.url), "utf8");
-const comingSoonSource = readFileSync(new URL("../src/renderer/InsightsComingSoon.tsx", import.meta.url), "utf8");
 const deckInsightsSource = readFileSync(new URL("../src/renderer/DeckInsightsView.tsx", import.meta.url), "utf8");
 const learningViewSource = readFileSync(new URL("../src/renderer/LearningInsightsView.tsx", import.meta.url), "utf8");
 const legacyExploreSource = readFileSync(new URL("../src/renderer/InsightsView.tsx", import.meta.url), "utf8");
@@ -12,7 +11,7 @@ const styleSource = readFileSync(new URL("../src/renderer/styles/app.css", impor
 const navigationSource = readFileSync(new URL("../src/shared/navigationModel.ts", import.meta.url), "utf8");
 
 describe("learner-first Insights surface", () => {
-  it("keeps Deck Insights live while Replay Coach shows a scoped Coming Soon state", () => {
+  it("keeps Deck Insights live while parking Replay Coach behind Coming Soon", () => {
     expect(navigationSource).toContain('{ kind: "route", id: "insights", label: "Insights", target: { view: "insights" } }');
     expect(appSource).toContain('insights: "Insights"');
     expect(appSource).toContain('case "insights": return <Lightbulb size={19} />');
@@ -25,20 +24,27 @@ describe("learner-first Insights surface", () => {
     expect(routeSource).toContain("replays={replays}");
     expect(routeSource).toContain("matches={visibleMatches}");
     expect(routeSource).toContain("activeDeckId={settings.activeDeckId}");
-    expect(hubSource).toContain('type InsightsMode = "deck" | "coach"');
     expect(hubSource).toContain("<DeckInsightsView");
     expect(hubSource).toContain('import { InsightsComingSoon } from "./InsightsComingSoon"');
     expect(hubSource).toContain("<InsightsComingSoon />");
+    expect(hubSource).not.toContain("ReplayCoachView");
     expect(hubSource).not.toContain("<LearningInsightsView");
     expect(hubSource).toContain("Deck Insights");
     expect(hubSource).toContain("Replay Coach");
     expect(hubSource).toContain("Coming soon · being refined");
-    expect(comingSoonSource).toContain("Replay Coach is being refined");
-    expect(comingSoonSource).toContain("Deck Insights remains available");
-    expect(comingSoonSource).toContain("Planned Replay Coach improvements");
-    expect(comingSoonSource).not.toContain("while Insights is unavailable");
-    expect(appSource).toContain("Replay Coach remains Coming Soon while its coaching experience is refined.");
+    expect(appSource).toContain("Replay Coach remains Coming Soon while we refine its review and practice flow.");
     expect(deckInsightsSource).toContain('type DeckInsightsSection = "overview" | "cards" | "matchups"');
+  });
+
+  it("retains authoritative exclusions for future Coach work and the filtered Deck Insights list", () => {
+    const routeStart = appSource.indexOf('if (view === "insights")');
+    const routeSource = appSource.slice(routeStart, appSource.indexOf('if (view === "mulligan-lab")', routeStart));
+    expect(routeSource).toContain("matches={visibleMatches}");
+    expect(routeSource).toContain("coachMatches={matches}");
+    expect(hubSource).toContain("coachMatches?: MatchDraft[]");
+    const deckStart = hubSource.indexOf("<DeckInsightsView");
+    const deckRoute = hubSource.slice(deckStart, hubSource.indexOf("/>", deckStart));
+    expect(deckRoute).toContain("matches={matches}");
   });
 
   it("leads with the Coach, Last Match, Journal and Data Lab learning loop", () => {

@@ -2,11 +2,9 @@ import React, { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import cardRegistryData from "../../resources/riftbound_card_registry.json";
 import cardLookupData from "../../resources/tcga_card_lookup.json";
-import {
-  riftboundCardCodeAliases,
-  riftboundCardCodeFromValue,
-  riftboundCanonicalArtCode
-} from "../shared/cardIdentity";
+import { riftboundCardCodeFromValue } from "../shared/cardIdentity";
+import { resolveBundledCardImage, resolveCardArtwork } from "./cardArtwork";
+export { resolveBundledCardImage as resolveBundledReplayCardImage } from "./cardArtwork";
 import type {
   RiftLiteReplayCard,
   RiftLiteReplayFrame,
@@ -22,7 +20,6 @@ type RiftLiteReplayViewerProps = {
 };
 
 const DEFAULT_RUNE_SLOTS = 12;
-const CARD_IMAGE_BY_CODE = buildCardImageByCode(cardRegistryData);
 const CARD_CODE_BY_NAME = buildCardCodeByName(cardLookupData, cardRegistryData);
 
 export function RiftLiteReplayViewer({ model }: RiftLiteReplayViewerProps) {
@@ -892,48 +889,13 @@ function cardVisualIdentity(card: RiftLiteReplayCard): string {
 }
 
 function useResolvedCardImage(card?: RiftLiteReplayCard | null): string {
-  const code = resolveCardCode(card);
-  const bundledImage = resolveBundledReplayCardImage(code);
-  return bundledImage || card?.imageUrl || "";
-}
-
-export function resolveBundledReplayCardImage(
-  value: string,
-  imageByCode: ReadonlyMap<string, string> = CARD_IMAGE_BY_CODE
-): string {
-  const code = normalizeRiftCodexCode(value);
-  for (const alias of riftboundCardCodeAliases(code)) {
-    const image = imageByCode.get(alias);
-    if (image) return image;
-  }
-  // Alternate/set-specific Rune IDs are not always published as standalone
-  // images. Only after checking every exact/signed/base alias do we use the
-  // canonical Rune artwork packaged in the registry.
-  const canonicalArtCode = riftboundCanonicalArtCode(code);
-  return canonicalArtCode ? imageByCode.get(canonicalArtCode) || "" : "";
-}
-
-function resolveCardCode(card?: RiftLiteReplayCard | null): string {
-  const explicit = normalizeRiftCodexCode(card?.code || "");
-  if (explicit) return explicit;
-  return CARD_CODE_BY_NAME.get(normalizeCardLookupName(card?.name || "")) || "";
+  const explicit = normalizeRiftCodexCode(card?.code || "") || normalizeRiftCodexCode(card?.imageUrl || "");
+  return resolveCardArtwork(explicit, card?.imageUrl)
+    || resolveBundledCardImage(CARD_CODE_BY_NAME.get(normalizeCardLookupName(card?.name || "")) || "");
 }
 
 function normalizeRiftCodexCode(value: string): string {
   return riftboundCardCodeFromValue(value);
-}
-
-function buildCardImageByCode(data: unknown): Map<string, string> {
-  const result = new Map<string, string>();
-  const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
-  const cards = Array.isArray(root.cards) ? root.cards : [];
-  for (const value of cards) {
-    const card = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-    const code = riftboundCardCodeFromValue(String(card.printId ?? ""));
-    const image = typeof card.imageUrl === "string" ? card.imageUrl.trim() : "";
-    if (code && image) result.set(code, image);
-  }
-  return result;
 }
 
 function buildCardCodeByName(legacyData: unknown, registryData: unknown): Map<string, string> {

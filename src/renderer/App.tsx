@@ -5,6 +5,14 @@ import { useOwnedPointerGesture } from "./useOwnedPointerGesture";
 import { createRoot } from "react-dom/client";
 import QRCode from "qrcode";
 import {
+  buildCommunityAverageComparisonSource,
+  buildCommunityDeckComparisonSource,
+  buildDeckComparisonRows,
+  buildSavedDeckComparisonSource,
+  deckComparisonSectionLabel,
+  type DeckComparisonSource
+} from "./deckComparison";
+import {
   Activity,
   AlertTriangle,
   ArrowLeftRight,
@@ -411,6 +419,8 @@ import { RULES_SEARCH_DRAWER_ID, RulesSearchDrawer } from "./RulesSearchDrawer";
 import { SideboardLabView } from "./SideboardLabView";
 import { TrainingLabsIntro } from "./TrainingLabsIntro";
 import { resolveBundledReplayCardImage, RiftLiteReplayViewer } from "./RiftLiteReplayViewer";
+import { resolveDeckCardArtwork } from "./cardArtwork";
+import { CardArtworkImage } from "./CardArtworkImage";
 import { SettingsAccordionSection } from "./SettingsAccordionSection";
 import {
   INITIAL_ATLAS_SHELL_VISIBILITY,
@@ -419,6 +429,8 @@ import {
   updateAtlasShellVisibility
 } from "./atlasShellVisibility";
 import { bindGameWebviewEvents } from "./gameWebviewEvents";
+import { AtlasDeckNavigation } from "./AtlasDeckNavigation";
+import { gamePlatformForTrustedUrl } from "../shared/embeddedContentSecurity";
 import {
   DEFAULT_HOME_FEATURED_VIDEOS,
   HOME_FEED_REFRESH_MS,
@@ -533,14 +545,15 @@ const LAB_TRAINING_LEGEND_NAMES = new Set(LAB_TRAINING_LEGEND_NAME_BY_CANONICAL.
 const RELEASE_NOTES = {
   version: APP_VERSION_META,
   title: `RiftLite v${APP_VERSION_META}`,
-  intro: "This hotfix improves RiftAtlas lobby interaction and keeps the Matches page stable while scrolling.",
+  intro: "This update brings Atlas deck editing into RiftLite, improves Player name recovery, and fills the missing signed-card artwork.",
   items: [
-    "RiftLite can restore Atlas's existing Player name field when the lobby loads it at zero size, without reading or changing the name.",
-    "Trusted pointer, focus, and keyboard activity now reinforces native focus and presentation for the embedded Atlas guest.",
-    "The interaction recovery does not reload Atlas, clear site data, sign you out, change your Player name, or start a match.",
-    "Passive Atlas font cache misses immediately after a successful recovery no longer appear as the latest embedded failure.",
-    "The Matches page now stays the same width as more saved rows appear while scrolling, with Replay, Edit, and Delete kept accessible.",
-    "Replay Coach remains Coming Soon while its coaching experience is refined."
+    "Atlas Edit Deck and New Deck now open inside RiftLite, with a Back to Play button for returning to the lobby.",
+    "Atlas can warn you about unsaved deck changes before you leave the editor; save in Atlas before returning to play.",
+    "A dedicated recovery fixes the collapsed Atlas Player name field that could persist in v0.9.72, without reading or changing your name.",
+    "All nine signed Vendetta variants are now included, with more consistent alternate-art display and corrected Shadowblade Lurker artwork.",
+    "Replay playback, export, cloud backup handling, and embedded Atlas recovery have received reliability improvements.",
+    "The installer no longer includes accumulated obsolete build files, reducing its download size.",
+    "Replay Coach remains Coming Soon while we refine its review and practice flow."
   ]
 };
 const RIOT_LEGAL_NOTICE = `RiftLite was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.`;
@@ -5759,6 +5772,15 @@ function App() {
       return;
     }
     const captureEvent = payload as CaptureEvent;
+    // The guest also hosts Atlas's deck editor. Its preload events must not
+    // change match or lobby state before main-process validation rejects them.
+    if (
+      captureEvent.platform !== mountedGamePlatformRef.current ||
+      gamePlatformForTrustedUrl(captureEvent.url, true) !== captureEvent.platform ||
+      !captureEvent.payload || typeof captureEvent.payload !== "object"
+    ) {
+      return;
+    }
     const atlasShellReadyEvent = captureEvent.platform === "atlas" &&
       captureEvent.kind === "debug" &&
       captureEvent.payload.reason === "atlas-app-shell-ready";
@@ -7494,14 +7516,26 @@ function App() {
                 Play on {settings.defaultGamePlatform === "atlas" ? "Atlas" : "TCGA"}
               </button>
             </div>
-          ) : (
-          <div className="top-actions" data-hidden={activeView !== "play"} data-tour-target="play">
+          ) : null}
+          <div className="top-actions" data-hidden={activeView !== "play"} data-tour-target="play" style={activeView === "home" ? { display: "none" } : undefined}>
             <button className="segmented" data-platform="tcga" onClick={() => void chooseGamePlatform("tcga")} data-active={activePlatform === "tcga"}>
               <Gamepad2 size={16} /> <span className="play-action-label">TCGA</span>
             </button>
             <button className="segmented" data-platform="atlas" onClick={() => void chooseGamePlatform("atlas")} data-active={activePlatform === "atlas"}>
               <Gamepad2 size={16} /> <span className="play-action-label">Atlas</span>
             </button>
+            {activePlatform === "atlas" && gameWebviewIsReady(activePlatform, mountedGamePlatform, preloadUrl) ? (
+              <AtlasDeckNavigation
+                webviewRef={gameRef}
+                mountKey={`${mountedGamePlatform}:${preloadUrl}:${gameWebviewEpoch}:${atlasExplicitRepairMode}:${atlasExplicitRepairToken}`}
+                onBeforeReturn={async () => {
+                  const status = await window.riftlite.getGamePlatformSwitchStatus();
+                  if (!status.allowed) showActionFeedback(status.message, 5_000);
+                  return status.allowed;
+                }}
+                onError={(message) => showActionFeedback(message, 5_000)}
+              />
+            ) : null}
             <button
               className="segmented icon-segment"
               onClick={() => void reloadGamePage(false)}
@@ -7571,7 +7605,6 @@ function App() {
               <Square size={14} fill="currentColor" /> <span className="play-action-label">Stop match</span>
             </button>
           </div>
-          )}
         </header>
 
         {!settings.firstRunComplete && activeView === "play" ? (
@@ -8616,7 +8649,7 @@ function opponentHintFromCommunityStat(stat: CommunityDeckCardStat, tag: string)
     name: stat.name,
     cardId: stat.cardId,
     code,
-    imageUrl: stat.imageUrl || deckTrackerImageUrlFromId(stat.cardId || code),
+    imageUrl: resolveDeckCardArtwork(stat),
     detail: stat.inclusionLabel,
     subDetail: `${stat.commonCopies || 0}x common | ${stat.winRateLabel} WR`,
     tag
@@ -9064,7 +9097,7 @@ function DeckTrackerOverlay({
               <strong>Confirm suggested cards</strong>
               {visionStatus.suggestions.slice(0, 4).map((suggestion) => (
                 <div className="deck-tracker-suggestion" key={`${suggestion.cardKey}-${suggestion.frameId}`}>
-                  {suggestion.imageUrl ? <img src={suggestion.imageUrl} alt="" loading="lazy" /> : <span className="deck-tracker-card-fallback">{suggestion.name.slice(0, 2)}</span>}
+                  <CardArtworkImage card={suggestion} alt="" loading="lazy" fallback={<span className="deck-tracker-card-fallback">{suggestion.name.slice(0, 2)}</span>} />
                   <div>
                     <strong>{suggestion.name}</strong>
                     <small>{suggestion.zone} - {Math.round(suggestion.confidenceScore * 100)}%</small>
@@ -9135,7 +9168,7 @@ function DeckTrackerOverlay({
           <div className="deck-tracker-card-list">
             {cardView !== "sideboard" && cardView !== "opponent" ? visibleCards.map((card) => (
               <div className="deck-tracker-card" key={card.cardKey}>
-                {card.imageUrl ? <img src={card.imageUrl} alt="" loading="lazy" /> : <span className="deck-tracker-card-fallback">{card.name.slice(0, 2)}</span>}
+                <CardArtworkImage card={card} alt="" loading="lazy" fallback={<span className="deck-tracker-card-fallback">{card.name.slice(0, 2)}</span>} />
                 <div className="deck-tracker-card-main">
                   <button type="button" onClick={() => void togglePin(card.cardKey)} data-pinned={card.pinned}>
                     <Flag size={13} /> {card.name}
@@ -9229,7 +9262,7 @@ function DeckTrackerOverlay({
 function DeckTrackerOpponentSeenCard({ card }: { card: DeckTrackerState["opponent"]["cards"][number] }) {
   return (
     <div className="deck-tracker-card deck-tracker-opponent-card">
-      {card.imageUrl ? <img src={card.imageUrl} alt="" loading="lazy" /> : <span className="deck-tracker-card-fallback">{card.name.slice(0, 2)}</span>}
+      <CardArtworkImage card={card} alt="" loading="lazy" fallback={<span className="deck-tracker-card-fallback">{card.name.slice(0, 2)}</span>} />
       <div className="deck-tracker-card-main">
         <strong>{card.name}</strong>
         <small>{card.count} seen {card.code ? `- ${card.code}` : ""}</small>
@@ -9245,7 +9278,7 @@ function DeckTrackerOpponentSeenCard({ card }: { card: DeckTrackerState["opponen
 function DeckTrackerOpponentHintCard({ card }: { card: OpponentTrackerHintCard }) {
   return (
     <div className="deck-tracker-card deck-tracker-opponent-card deck-tracker-opponent-hint-card">
-      {card.imageUrl ? <img src={card.imageUrl} alt="" loading="lazy" /> : <span className="deck-tracker-card-fallback">{card.name.slice(0, 2)}</span>}
+      <CardArtworkImage card={card} alt="" loading="lazy" fallback={<span className="deck-tracker-card-fallback">{card.name.slice(0, 2)}</span>} />
       <div className="deck-tracker-card-main">
         <strong>{card.name}</strong>
         <small>{card.detail}</small>
@@ -9294,7 +9327,7 @@ function DeckTrackerSideboardSection({
         const key = `${direction}:${option.cardKey}`;
         return (
           <div className="deck-tracker-sideboard-row" key={`${direction}-${option.cardKey}`}>
-            {option.imageUrl ? <img src={option.imageUrl} alt="" loading="lazy" /> : <span className="deck-tracker-card-fallback">{option.name.slice(0, 2)}</span>}
+            <CardArtworkImage card={option} alt="" loading="lazy" fallback={<span className="deck-tracker-card-fallback">{option.name.slice(0, 2)}</span>} />
             <div>
               <strong>{option.name}</strong>
               <small>{qty}/{option.qty} {direction === "in" ? "in" : "out"} {option.code ? `- ${option.code}` : ""}</small>
@@ -10454,221 +10487,6 @@ function HomeView({
       ) : null}
     </section>
   );
-}
-
-type DeckComparisonSourceKind = "saved" | "community-average" | "community-deck";
-
-type DeckComparisonCardSide = {
-  key: string;
-  name: string;
-  imageUrl: string;
-  section: string;
-  qty: number;
-  label: string;
-  inclusionRate?: number;
-};
-
-type DeckComparisonSource = {
-  key: string;
-  kind: DeckComparisonSourceKind;
-  label: string;
-  subLabel: string;
-  legend: string;
-  cards: Map<string, DeckComparisonCardSide>;
-};
-
-type DeckComparisonRow = {
-  key: string;
-  name: string;
-  imageUrl: string;
-  section: string;
-  status: "shared" | "left-only" | "right-only";
-  left?: DeckComparisonCardSide;
-  right?: DeckComparisonCardSide;
-  delta: number;
-  importance: number;
-};
-
-function deckComparisonKeyFromName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function deckComparisonSectionLabel(section: string): string {
-  if (section === "mainDeck") return "Main";
-  if (section === "sideboard") return "Sideboard";
-  if (section === "battlefields") return "Battlefield";
-  if (section === "runes") return "Rune";
-  if (section === "champions") return "Champion";
-  return "Deck";
-}
-
-function entriesForDeckComparison(snapshot: DeckSnapshot): Array<{ entry: DeckEntry; section: string }> {
-  return [
-    ...(snapshot.mainDeck ?? []).map((entry) => ({ entry, section: "mainDeck" })),
-    ...(snapshot.sideboard ?? []).map((entry) => ({ entry, section: "sideboard" })),
-    ...(snapshot.battlefields ?? []).map((entry) => ({ entry, section: "battlefields" }))
-  ];
-}
-
-function buildSavedDeckComparisonSource(deck: SavedDeck): DeckComparisonSource | null {
-  const snapshot = parseCommunityDeckSnapshot(deck.snapshotJson);
-  if (!snapshot) {
-    return null;
-  }
-  const cards = new Map<string, DeckComparisonCardSide>();
-  for (const { entry, section } of entriesForDeckComparison(snapshot)) {
-    const key = deckComparisonKeyFromName(entry.name);
-    if (!key) {
-      continue;
-    }
-    const current = cards.get(key);
-    const qty = Math.max(0, entry.qty ?? 1);
-    cards.set(key, {
-      key,
-      name: current?.name || entry.name,
-      imageUrl: current?.imageUrl || entry.imageUrl || "",
-      section: current?.section || section,
-      qty: (current?.qty ?? 0) + qty,
-      label: `${(current?.qty ?? 0) + qty}x`
-    });
-  }
-  return {
-    key: `saved:${deck.id}`,
-    kind: "saved",
-    label: deck.title,
-    subLabel: `${snapshot.legend || deck.legend || "Saved deck"} - ${cards.size} cards`,
-    legend: snapshot.legend || deck.legend,
-    cards
-  };
-}
-
-function buildCommunityDeckComparisonSource(group: CommunityDeckGroup): DeckComparisonSource | null {
-  if (!group.snapshot) {
-    return null;
-  }
-  const cards = new Map<string, DeckComparisonCardSide>();
-  for (const { entry, section } of entriesForDeckComparison(group.snapshot)) {
-    const key = deckComparisonKeyFromName(entry.name);
-    if (!key) {
-      continue;
-    }
-    const current = cards.get(key);
-    const qty = Math.max(0, entry.qty ?? 1);
-    cards.set(key, {
-      key,
-      name: current?.name || entry.name,
-      imageUrl: current?.imageUrl || entry.imageUrl || "",
-      section: current?.section || section,
-      qty: (current?.qty ?? 0) + qty,
-      label: `${(current?.qty ?? 0) + qty}x`
-    });
-  }
-  return {
-    key: `community-deck:${group.key}`,
-    kind: "community-deck",
-    label: group.title || `${group.legend} deck`,
-    subLabel: `${group.legend} - ${group.total} public matches`,
-    legend: group.legend,
-    cards
-  };
-}
-
-function buildCommunityAverageComparisonSource(legend: string, groups: CommunityDeckGroup[]): DeckComparisonSource | null {
-  const snapshotGroups = groups.filter((group) => group.snapshot);
-  if (!snapshotGroups.length) {
-    return null;
-  }
-  const aggregate = new Map<string, {
-    name: string;
-    imageUrl: string;
-    section: string;
-    totalQty: number;
-    deckCount: number;
-  }>();
-  for (const group of snapshotGroups) {
-    if (!group.snapshot) continue;
-    const perDeck = new Map<string, DeckComparisonCardSide>();
-    for (const { entry, section } of entriesForDeckComparison(group.snapshot)) {
-      const key = deckComparisonKeyFromName(entry.name);
-      if (!key) continue;
-      const current = perDeck.get(key);
-      const qty = Math.max(0, entry.qty ?? 1);
-      perDeck.set(key, {
-        key,
-        name: current?.name || entry.name,
-        imageUrl: current?.imageUrl || entry.imageUrl || "",
-        section: current?.section || section,
-        qty: (current?.qty ?? 0) + qty,
-        label: ""
-      });
-    }
-    for (const card of perDeck.values()) {
-      const current = aggregate.get(card.key) ?? {
-        name: card.name,
-        imageUrl: card.imageUrl,
-        section: card.section,
-        totalQty: 0,
-        deckCount: 0
-      };
-      current.totalQty += card.qty;
-      current.deckCount += 1;
-      if (!current.imageUrl && card.imageUrl) {
-        current.imageUrl = card.imageUrl;
-      }
-      aggregate.set(card.key, current);
-    }
-  }
-  const cards = new Map<string, DeckComparisonCardSide>();
-  for (const [key, card] of aggregate) {
-    const inclusionRate = Math.round((card.deckCount / snapshotGroups.length) * 1000) / 10;
-    const averageCopies = Math.round((card.totalQty / card.deckCount) * 10) / 10;
-    cards.set(key, {
-      key,
-      name: card.name,
-      imageUrl: card.imageUrl,
-      section: card.section,
-      qty: averageCopies,
-      label: `${inclusionRate}% / ${averageCopies}x avg`,
-      inclusionRate
-    });
-  }
-  return {
-    key: `community-average:${legend}`,
-    kind: "community-average",
-    label: `${legend} community average`,
-    subLabel: `${snapshotGroups.length} unique public decklists`,
-    legend,
-    cards
-  };
-}
-
-function buildDeckComparisonRows(left: DeckComparisonSource | null, right: DeckComparisonSource | null): DeckComparisonRow[] {
-  if (!left || !right) {
-    return [];
-  }
-  const keys = new Set([...left.cards.keys(), ...right.cards.keys()]);
-  return [...keys].map((key) => {
-    const leftCard = left.cards.get(key);
-    const rightCard = right.cards.get(key);
-    const status: DeckComparisonRow["status"] = leftCard && rightCard ? "shared" : leftCard ? "left-only" : "right-only";
-    const primary = rightCard ?? leftCard;
-    const rightWeight = rightCard?.inclusionRate ?? rightCard?.qty ?? 0;
-    const leftWeight = leftCard?.inclusionRate ?? leftCard?.qty ?? 0;
-    return {
-      key,
-      name: primary?.name ?? "Unknown card",
-      imageUrl: primary?.imageUrl ?? "",
-      section: primary?.section ?? "mainDeck",
-      status,
-      left: leftCard,
-      right: rightCard,
-      delta: Math.round(((leftCard?.qty ?? 0) - (rightCard?.qty ?? 0)) * 10) / 10,
-      importance: Math.max(leftWeight, rightWeight)
-    };
-  }).sort((a, b) => {
-    const statusOrder = { "right-only": 0, shared: 1, "left-only": 2 } as const;
-    return statusOrder[a.status] - statusOrder[b.status] || b.importance - a.importance || a.name.localeCompare(b.name);
-  });
 }
 
 type MulliganLabLoadState = "loading" | "ready" | "unavailable" | "error";
@@ -12603,6 +12421,7 @@ function DashboardView({
       <InsightsHubView
         replays={replays}
         matches={visibleMatches}
+        coachMatches={matches}
         decks={decks}
         activeDeckId={settings.activeDeckId}
         enhancedInsightsEnabled={settings.enhancedInsightsEnabled === true}
@@ -13747,7 +13566,7 @@ function latestLocalRiftReplayScore(events: ReplayTimelineEvent[]): ReplayTimeli
 }
 
 function localRiftReplayImageFromEvent(event: ReplayTimelineEvent): string {
-  return event.cardId ? deckTrackerImageUrlFromId(event.cardId) : "";
+  return event.cardId ? resolveDeckCardArtwork({ cardId: event.cardId }) : "";
 }
 
 function localRiftReplaySeenCards(events: ReplayTimelineEvent[], side: "me" | "opponent", limit: number): LocalRiftReplayCardChip[] {
@@ -13780,7 +13599,7 @@ function localRiftReplayKnownOpponentCards(event: ReplayTimelineEvent | null, li
     key: `${card.id || card.code || card.name}-${index}`,
     name: card.name,
     count: 1,
-    imageUrl: card.imageUrl || deckTrackerImageUrlFromId(card.code),
+    imageUrl: resolveDeckCardArtwork(card),
     meta: card.type || "known card"
   }));
 }
@@ -18972,7 +18791,11 @@ function readDeckEntry(entry: unknown): { qty: number; name: string; imageUrl: s
   return {
     qty: Number.isFinite(qty) ? Math.max(1, Math.trunc(qty)) : 1,
     name: deckEntryText(record.name ?? record.cardName ?? record.card_name ?? record.title),
-    imageUrl: deckEntryText(record.imageUrl ?? record.image_url)
+    imageUrl: resolveDeckCardArtwork({
+      cardId: deckEntryText(record.cardId ?? record.card_id),
+      code: deckEntryText(record.code ?? record.cardCode ?? record.card_code),
+      imageUrl: deckEntryText(record.imageUrl ?? record.image_url)
+    })
   };
 }
 
@@ -19984,7 +19807,7 @@ function DeckNotebookPanel({
           <div className="deck-watchlist">
             {notebook.watchlist.map((item) => (
               <div className="deck-watch-card" key={item.id}>
-                {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <div className="deck-watch-placeholder">{item.cardName.slice(0, 1)}</div>}
+                <CardArtworkImage card={item} alt="" fallback={<div className="deck-watch-placeholder">{item.cardName.slice(0, 1)}</div>} />
                 <div>
                   <strong>{item.cardName}</strong>
                   <select value={item.status} onChange={(event) => updateWatchItem(item.id, { status: event.target.value as DeckCardWatchStatus })}>
@@ -20214,7 +20037,7 @@ function GuideSectionEditor({ title, options, section, onChange }: {
         {section.cards.map((card) => (
           <div className="guide-card" key={card.id}>
             <div className="guide-card-thumb">
-              {card.imageUrl ? <img src={card.imageUrl} alt="" loading="lazy" draggable={false} /> : <span className="guide-card-fallback">{card.cardName.slice(0, 1)}</span>}
+              <CardArtworkImage card={card} alt="" loading="lazy" draggable={false} fallback={<span className="guide-card-fallback">{card.cardName.slice(0, 1)}</span>} />
               {card.priority ? <strong className="guide-priority-badge">P{card.priority}</strong> : null}
             </div>
             <div>
@@ -20967,7 +20790,7 @@ function GuidePreviewCard({ card }: { card: DeckGuideCardRef }) {
   return (
     <div className="guide-preview-card" data-expanded={expanded || !canExpand}>
       <div className="guide-card-thumb">
-        {card.imageUrl ? <img src={card.imageUrl} alt="" loading="lazy" draggable={false} /> : <span>{card.cardName.slice(0, 1)}</span>}
+        <CardArtworkImage card={card} alt="" loading="lazy" draggable={false} fallback={<span>{card.cardName.slice(0, 1)}</span>} />
         {card.priority ? <strong className="guide-priority-badge">P{card.priority}</strong> : null}
       </div>
       <div>

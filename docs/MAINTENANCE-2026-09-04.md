@@ -1,5 +1,27 @@
 # RiftLite maintenance implementation — 2026-09-04
 
+Latest continuation: [Replay Coach implementation and local rebuild, 2026-09-06](./REPLAY-COACH-2026-09-06.md). The user authorized the new Coach implementation and a local installer containing this maintenance work, its follow-ups and the signed-art fixes. This supersedes the earlier installer status below; public assets and deferred live-game acceptance remain unchanged.
+
+Subsequent source work is recorded in [the 2026-09-05 card artwork audit](./CARD-ART-AUDIT-2026-09-05.md). It adds local desktop and website fixes on top of the maintenance changes below. Existing installers and public assets remain unchanged.
+
+## Latest source follow-up — 22:49 BST
+
+The user requested complete generated-output cleanup and gradual modularisation of `App.tsx` and `main.ts`. These changes are **local and uncommitted after checkpoint `23893a648349ccda30ae87ee298fcab4e0be91fa`**. The 22:35 installer below remains unchanged and does **not** contain this source follow-up. No installer rebuild, installation, version change, push or publication was performed. Live gameplay validation remains explicitly deferred.
+
+- `npm run build` now runs `build:clean` before Electron, game-preload and renderer compilation. `scripts/clean-build-output.mjs` derives the checkout from its own location, verifies the project and fixed `dist` boundary, and rejects symlinks/junctions before any removal. Standalone compiler commands remain available. Tests exercise complete output removal, protected adjacent files, missing output, unexpected paths, links and a foreign working directory.
+- The real clean build removed `dist/main/services/replayVideoOrganizer.js` and its map, and `dist/shared/privateHubReplayLibrary.js` and its map. Current Electron/preload/shared/renderer output was regenerated successfully.
+- `src/renderer/deckComparison.ts` now owns saved/community deck comparison, inclusion averages, labels and row ordering. App retains its state and UI. About 214 lines moved, with direct tests of parsing, aggregation, rounding, labels, sorting, stable ties and input preservation.
+- `src/main/services/replayMp4RenderPlan.ts` now owns MP4 geometry, clipping, overlay/voice timing and SVG generation. Main retains export I/O and lifecycle orchestration. 317 lines moved, with direct tests of crop/clip boundaries, timing fallbacks, escaping and invalid coordinates. Existing edge behaviour is preserved.
+- Independent comparison found **all 7 deck-comparison and 20 MP4 function bodies unchanged**. Cleanup and extraction reviews found no actionable concerns.
+
+Validation completed at **22:49 BST**: TypeScript check, the account-sync gate (**5 files / 82 tests**), the complete suite (**192 files / 1,903 tests**), the full clean production build and isolated startup of the fresh compiled main/preloads/renderer all passed. The startup check used the development Electron executable with `NODE_ENV=production` and the production `dist/renderer/index.html`, isolated data paths and blocked external networking. It is unpackaged startup evidence, not installer or live-game acceptance. The known blocked-guest IPC messages and Vite large-chunk warning remain.
+
+Evidence is under `output/maintenance-modules-20260904-2250`: `source-manifest.json`, stage logs, `validation-evidence.json` and the isolated startup snapshot/logs. Source hashes stayed unchanged throughout validation. Both the canonical public installer and the earlier local candidate retained their recorded hashes. The five historical untracked entries remain untouched; no files were staged.
+
+## Earlier maintenance checkpoint and installer — 22:35 BST
+
+The remaining sections preserve the earlier checkpoint and candidate evidence. Their package audit and installer hashes apply to that checkpoint, not the later uncommitted source above.
+
 This continues the Atlas Player-field checkpoint in [HANDOVER-2026-09-04.md](./HANDOVER-2026-09-04.md). The user authorized the reviewed improvements, local Windows rebuilds, renderer-output cleanup and a Git checkpoint. This document accompanies the checkpoint of the intended source, tests and handovers on `hotfix/atlas-shell-recovery`, following `e6b5a79001efe1b63cf93f39d95094ac65052f53`. Use the read-only handover snapshot for the exact current commit. No version bump, installation, push, tag, publication, website deployment or production-data change was performed.
 
 The latest local Windows candidate completed successfully on **2026-09-04 at 22:35 BST**. The earlier 22:15 candidate is preserved as build history. The user explicitly chose to **leave live gameplay validation pending**.

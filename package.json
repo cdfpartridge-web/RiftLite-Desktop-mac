@@ -1,6 +1,6 @@
 {
   "name": "riftlite-desktop-v09",
-  "version": "0.9.72",
+  "version": "0.9.73",
   "private": true,
   "description": "RiftLite 0.9 desktop companion app.",
   "main": "dist/main/main.js",
@@ -13,7 +13,8 @@
     "electron:smoke": "npm run build:electron && npm run build:game-preload && node scripts/run-electron-smoke.mjs --development",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build:game-preload": "esbuild src/game-preload/gamePreload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/game-preload/gamePreload.cjs",
-    "build": "npm run build:electron && npm run build:game-preload && vite build",
+    "build:clean": "node scripts/clean-build-output.mjs",
+    "build": "npm run build:clean && npm run build:electron && npm run build:game-preload && vite build",
     "release:account-sync-gate": "vitest run tests/accountCloudSync.test.ts tests/accountCloudSyncQueue.test.ts tests/accountCloudRestoreCoordinator.test.ts tests/accountIdentity.test.ts tests/accountSyncConfidence.test.ts",
     "release:gate": "npm run lint && npm run release:account-sync-gate && npm test",
     "release:verify:mac": "node scripts/verify-mac-release-artifacts.mjs",

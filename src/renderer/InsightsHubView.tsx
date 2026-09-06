@@ -5,8 +5,7 @@ import type { MatchDraft, ReplayRecord, SavedDeck } from "../shared/types";
 import { DeckInsightsView } from "./DeckInsightsView";
 import { EnhancedInsightsIntro, type EnhancedInsightsIntroSelection } from "./EnhancedInsightsIntro";
 import { InsightsComingSoon } from "./InsightsComingSoon";
-
-type InsightsMode = "deck" | "coach";
+import { readInsightsMode, saveInsightsMode, type InsightsMode } from "./insightsModeSession";
 
 export interface EnhancedInsightsSettingsPatch {
   enhancedInsightsEnabled?: boolean;
@@ -17,6 +16,8 @@ export interface EnhancedInsightsSettingsPatch {
 interface InsightsHubViewProps {
   replays: ReplayRecord[];
   matches: MatchDraft[];
+  /** Includes excluded originals so Coach cannot revive them from replay snapshots. */
+  coachMatches?: MatchDraft[];
   decks: SavedDeck[];
   activeDeckId: string;
   enhancedInsightsEnabled: boolean;
@@ -39,7 +40,7 @@ export function InsightsHubView({
   onNavigate,
   onSaveEnhancedInsights
 }: InsightsHubViewProps) {
-  const [mode, setMode] = useState<InsightsMode>("deck");
+  const [mode, setMode] = useState<InsightsMode>(readInsightsMode);
   const [enhancedIntroOpen, setEnhancedIntroOpen] = useState(() => !enhancedInsightsIntroSeen);
   const [enhancedIntroBusy, setEnhancedIntroBusy] = useState(false);
   const [enhancedIntroError, setEnhancedIntroError] = useState("");
@@ -48,6 +49,11 @@ export function InsightsHubView({
   useEffect(() => {
     if (!enhancedInsightsIntroSeen) setEnhancedIntroOpen(true);
   }, [enhancedInsightsIntroSeen]);
+
+  function chooseMode(next: InsightsMode) {
+    setMode(next);
+    saveInsightsMode(next);
+  }
 
   function openEnhancedInsightsGuide() {
     if (enhancedIntroBusy) return;
@@ -99,7 +105,7 @@ export function InsightsHubView({
           type="button"
           className={mode === "deck" ? "active" : ""}
           aria-pressed={mode === "deck"}
-          onClick={() => setMode("deck")}
+          onClick={() => chooseMode("deck")}
         >
           <Layers3 size={17} />
           <span><strong>Deck Insights</strong><small>Understand the list and how it performs</small></span>
@@ -108,7 +114,7 @@ export function InsightsHubView({
           type="button"
           className={mode === "coach" ? "active" : ""}
           aria-pressed={mode === "coach"}
-          onClick={() => setMode("coach")}
+          onClick={() => chooseMode("coach")}
         >
           <BrainCircuit size={17} />
           <span><strong>Replay Coach</strong><small>Coming soon · being refined</small></span>

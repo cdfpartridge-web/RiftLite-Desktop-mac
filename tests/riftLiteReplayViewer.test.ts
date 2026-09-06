@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { resolveBundledReplayCardImage } from "../src/renderer/RiftLiteReplayViewer";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { resolveBundledReplayCardImage, RiftLiteReplayViewer } from "../src/renderer/RiftLiteReplayViewer";
+import type { RiftLiteReplayCard, RiftLiteReplayModel, RiftLiteReplayPlayer } from "../src/shared/riftLiteReplayEngine";
+
+function modelForCard(patch: Partial<RiftLiteReplayCard>): RiftLiteReplayModel {
+  const card: RiftLiteReplayCard = {
+    id: "card-1", key: "card-1", name: "Jhin, Virtuoso", code: "", imageUrl: "",
+    zone: "hand", ownerId: "local", side: "local", ...patch
+  };
+  const local: RiftLiteReplayPlayer = {
+    id: "local", name: "Player", side: "local", score: 0,
+    zones: { hand: { id: "hand", label: "Hand", cards: [card] } }
+  };
+  const opponent: RiftLiteReplayPlayer = { id: "opponent", name: "Opponent", side: "opponent", score: 0, zones: {} };
+  return {
+    id: "replay-1", title: "Artwork test", messageCount: 1, diagnostics: [], events: [], players: [local, opponent],
+    frames: [{ id: "frame-1", index: 0, stage: "openingHands", label: "Opening hand", local, opponent, chain: [], events: [] }]
+  };
+}
 
 describe("RiftLiteReplayViewer card artwork", () => {
   it("uses canonical artwork for set-specific Rune identities", () => {
@@ -31,5 +50,35 @@ describe("RiftLiteReplayViewer card artwork", () => {
 
     expect(resolveBundledReplayCardImage("UNL-089A", images)).toBe("");
     expect(resolveBundledReplayCardImage("SFD-006B", images)).toBe("");
+  });
+
+  it("renders the exact signed printing for Atlas S codes, ahead of a captured base image", () => {
+    const signed = resolveBundledReplayCardImage("UNL-226*");
+    const base = resolveBundledReplayCardImage("UNL-226");
+    expect(signed).not.toBe(base);
+    const markup = renderToStaticMarkup(createElement(RiftLiteReplayViewer, {
+      model: modelForCard({ code: "UNL-226S", imageUrl: base })
+    }));
+    expect(markup).toContain(`src="${signed}"`);
+    expect(markup).not.toContain(`src="${base}"`);
+  });
+
+  it("renders captured artwork when only a different bundled printing exists", () => {
+    const base = resolveBundledReplayCardImage("UNL-226");
+    expect(resolveBundledReplayCardImage("UNL-226B")).toBe(base);
+    const source = "https://cards.test/UNL-226B.webp";
+    const markup = renderToStaticMarkup(createElement(RiftLiteReplayViewer, {
+      model: modelForCard({ code: "UNL-226B", imageUrl: source })
+    }));
+    expect(markup).toContain(`src="${source}"`);
+    expect(markup).not.toContain(`src="${base}"`);
+  });
+
+  it("does not use a name-only base match to override a captured image", () => {
+    const source = "https://cards.test/custom-signed-image.png";
+    const markup = renderToStaticMarkup(createElement(RiftLiteReplayViewer, {
+      model: modelForCard({ imageUrl: source })
+    }));
+    expect(markup).toContain(`src="${source}"`);
   });
 });

@@ -20,7 +20,7 @@ export type ReplayCoachingLifecycle =
 
 export type ReplayCoachingGameStage = "preboard" | "postboard";
 export type ReplayCoachingInitiative = "1st" | "2nd";
-export type ReplayCoachingAdherence = "followed" | "missed" | "unsure" | "not-applicable";
+export type ReplayCoachingAdherence = "followed" | "adapted" | "missed" | "unsure" | "not-applicable";
 export type ReplayCoachingGameResult = "Win" | "Loss" | "Draw" | "Incomplete";
 
 /** A renderer-independent copy of the insight fields needed by a coaching focus. */
@@ -53,6 +53,8 @@ export interface ReplayCoachingReportSnapshot {
 
 export interface ReplayCoachingEligibilityScope {
   deckKey?: string;
+  /** The immutable deck-list fingerprint, rather than a mutable deck name. */
+  deckVersionId?: string;
   opponentLegend?: string;
   gameStage?: ReplayCoachingGameStage;
   initiative?: ReplayCoachingInitiative;
@@ -65,6 +67,7 @@ export interface ReplayCoachingGameSnapshot {
   matchId?: string;
   gameNumber?: number;
   deckKey?: string;
+  deckVersionId?: string;
   opponentLegend?: string;
   gameStage?: ReplayCoachingGameStage;
   initiative?: ReplayCoachingInitiative;
@@ -86,6 +89,7 @@ export interface ReplayCoachingStatusEntry {
 export interface ReplayCoachingProcessCounts {
   eligibleGames: number;
   followed: number;
+  adapted?: number;
   missed: number;
   unsure: number;
   notApplicable: number;
@@ -113,6 +117,18 @@ export interface ReplayCoachingExperiment {
   games: ReplayCoachingGameObservation[];
   createdAt: string;
   startedAt?: string;
+  goalId?: string;
+  goalText?: string;
+  notebookDeckId?: string;
+}
+
+export type ReplayCoachingConclusionDecision = "keep-practising" | "adjust-cue" | "finish-practice";
+
+export interface ReplayCoachingConclusion {
+  experimentId: string;
+  note: string;
+  decision: ReplayCoachingConclusionDecision;
+  recordedAt: string;
 }
 
 export interface ReplayCoachingFocus {
@@ -125,6 +141,8 @@ export interface ReplayCoachingFocus {
   eligibility: ReplayCoachingEligibilityScope;
   reflection?: ReplayCoachingReflectionRecord;
   experiment?: ReplayCoachingExperiment;
+  experimentHistory?: ReplayCoachingExperiment[];
+  conclusions?: ReplayCoachingConclusion[];
   statusHistory: ReplayCoachingStatusEntry[];
 }
 
@@ -150,6 +168,9 @@ export interface ReplayCoachingExperimentDefinition {
   successSignal?: string;
   targetEligibleGames?: number;
   baseline?: Partial<ReplayCoachingProcessCounts>;
+  goalId?: string;
+  goalText?: string;
+  notebookDeckId?: string;
 }
 
 export interface ReplayCoachingProgress {
@@ -168,7 +189,7 @@ export interface ReplayCoachingProgress {
   };
 }
 
-export type ReplayCoachingRecordReason = "not-testing" | "no-experiment" | "ineligible" | "duplicate" | "target-complete";
+export type ReplayCoachingRecordReason = "not-testing" | "no-experiment" | "ineligible" | "duplicate" | "target-complete" | "capture-wrong";
 
 export interface ReplayCoachingRecordResult {
   focus: ReplayCoachingFocus;
@@ -189,7 +210,10 @@ const LIFECYCLES = new Set<ReplayCoachingLifecycle>([
   "new", "reviewed", "hypothesis", "testing", "learned", "adjusted", "paused"
 ]);
 const ADHERENCE_VALUES = new Set<ReplayCoachingAdherence>([
-  "followed", "missed", "unsure", "not-applicable"
+  "followed", "adapted", "missed", "unsure", "not-applicable"
+]);
+const CONCLUSION_DECISIONS = new Set<ReplayCoachingConclusionDecision>([
+  "keep-practising", "adjust-cue", "finish-practice"
 ]);
 const RESULTS = new Set<ReplayCoachingGameResult>(["Win", "Loss", "Draw", "Incomplete"]);
 const MAX_FOCUSES = 100;
@@ -276,20 +300,31 @@ export function defineReplayCoachingExperiment(
   definition: ReplayCoachingExperimentDefinition,
   now: string | Date = new Date()
 ): ReplayCoachingFocus {
+  if (focus.reflection?.value === "wrong") return focus;
+  const hypothesis = boundedText(definition.hypothesis);
+  const process = boundedText(definition.process);
+  if (!hypothesis || !process) return focus;
   const recordedAt = isoDate(now);
-  const targetEligibleGames = clampTargetGames(definition.targetEligibleGames);
+  const previous = focus.experiment;
+  const targetEligibleGames = clampTargetGames(definition.targetEligibleGames ?? previous?.targetEligibleGames);
   const experiment: ReplayCoachingExperiment = {
-    id: boundedText(definition.id) || `experiment:${slug(focus.id)}:${recordedAt}`,
-    hypothesis: boundedText(definition.hypothesis),
-    process: boundedText(definition.process),
+    ...previous,
+    id: previous?.id || boundedText(definition.id) || `experiment:${slug(focus.id)}:${recordedAt}`,
+    hypothesis,
+    process,
     targetEligibleGames,
-    baseline: replayCoachingProcessCounts(definition.baseline),
-    games: [],
-    createdAt: recordedAt,
-    ...(boundedText(definition.successSignal) ? { successSignal: boundedText(definition.successSignal) } : {})
+    baseline: replayCoachingProcessCounts(definition.baseline ?? previous?.baseline),
+    games: previous?.games ?? [],
+    createdAt: previous?.createdAt ?? recordedAt
   };
+  for (const field of ["successSignal", "goalId", "goalText", "notebookDeckId"] as const) {
+    if (definition[field] === undefined) continue;
+    const text = boundedText(definition[field]);
+    if (text) experiment[field] = text;
+    else delete experiment[field];
+  }
   const next = { ...focus, experiment, updatedAt: recordedAt };
-  return focus.status === "hypothesis"
+  return previous || focus.status === "hypothesis"
     ? next
     : withStatus(next, "hypothesis", recordedAt, "Experiment defined");
 }
@@ -298,7 +333,7 @@ export function startReplayCoachingExperiment(
   focus: ReplayCoachingFocus,
   now: string | Date = new Date()
 ): ReplayCoachingFocus {
-  if (!focus.experiment || !focus.experiment.hypothesis || !focus.experiment.process) return focus;
+  if (focus.reflection?.value === "wrong" || !focus.experiment || !focus.experiment.hypothesis || !focus.experiment.process) return focus;
   const recordedAt = isoDate(now);
   const next = {
     ...focus,
@@ -313,16 +348,64 @@ export function startReplayCoachingExperiment(
   return withStatus(next, "testing", recordedAt, "Experiment started");
 }
 
+/** A conclusion closes one trial; starting another archives all of its check-ins. */
+export function saveReplayCoachingConclusion(
+  focus: ReplayCoachingFocus,
+  input: { note: string; decision: ReplayCoachingConclusionDecision },
+  now: string | Date = new Date()
+): ReplayCoachingFocus {
+  const experiment = focus.experiment;
+  const note = boundedText(input.note);
+  const progress = replayCoachingProgress(focus);
+  if (!experiment || !note || focus.reflection?.value === "wrong" || !progress?.readyForReview
+    || !CONCLUSION_DECISIONS.has(input.decision)
+    || focus.conclusions?.some((item) => item.experimentId === experiment.id)) return focus;
+  const recordedAt = isoDate(now);
+  const next: ReplayCoachingFocus = {
+    ...focus,
+    updatedAt: recordedAt,
+    conclusions: [...(focus.conclusions ?? []), {
+      experimentId: experiment.id,
+      note,
+      decision: input.decision,
+      recordedAt
+    }]
+  };
+  if (input.decision === "finish-practice") return withStatus(next, "learned", recordedAt, note);
+  next.experimentHistory = [...(focus.experimentHistory ?? []), experiment];
+  next.experiment = {
+    ...experiment,
+    id: `experiment:${slug(focus.id)}:${recordedAt}:${next.conclusions!.length}`,
+    baseline: replayCoachingProcessCounts(progress.during),
+    games: [],
+    createdAt: recordedAt
+  };
+  delete next.experiment.startedAt;
+  if (input.decision === "keep-practising") {
+    next.experiment.startedAt = recordedAt;
+    return withStatus(next, "testing", recordedAt, note);
+  }
+  return withStatus(next, "hypothesis", recordedAt, note);
+}
+
 export function normalizeReplayCoachingEligibility(
   scope: ReplayCoachingEligibilityScope | null | undefined
 ): ReplayCoachingEligibilityScope {
   if (!scope) return {};
   const next: ReplayCoachingEligibilityScope = {};
   if (boundedText(scope.deckKey)) next.deckKey = boundedText(scope.deckKey);
+  if (boundedText(scope.deckVersionId)) next.deckVersionId = boundedText(scope.deckVersionId);
   if (boundedText(scope.opponentLegend)) next.opponentLegend = boundedText(scope.opponentLegend);
   if (scope.gameStage === "preboard" || scope.gameStage === "postboard") next.gameStage = scope.gameStage;
   if (scope.initiative === "1st" || scope.initiative === "2nd") next.initiative = scope.initiative;
   return next;
+}
+
+/** New trials need a fully comparable source game; old scopes remain readable. */
+export function hasReplayCoachingPracticeScope(scope: ReplayCoachingEligibilityScope): boolean {
+  const normalized = normalizeReplayCoachingEligibility(scope);
+  return Boolean(normalized.deckKey && normalized.deckVersionId && normalized.opponentLegend
+    && normalized.gameStage && normalized.initiative);
 }
 
 export function isReplayCoachingGameEligible(
@@ -330,11 +413,27 @@ export function isReplayCoachingGameEligible(
   game: ReplayCoachingGameSnapshot
 ): boolean {
   if (scope.deckKey && normalize(scope.deckKey) !== normalize(game.deckKey)) return false;
+  if (scope.deckVersionId && boundedText(scope.deckVersionId) !== boundedText(game.deckVersionId)) return false;
   if (scope.opponentLegend && normalize(scope.opponentLegend) !== normalize(game.opponentLegend)) return false;
   const gameStage = game.gameStage ?? gameStageFromNumber(game.gameNumber);
   if (scope.gameStage && scope.gameStage !== gameStage) return false;
   if (scope.initiative && scope.initiative !== game.initiative) return false;
   return true;
+}
+
+export function isReplayCoachingGameEligibleForFocus(
+  focus: ReplayCoachingFocus,
+  game: ReplayCoachingGameSnapshot
+): boolean {
+  if (focus.reflection?.value === "wrong" || !focus.experiment?.startedAt || !boundedText(game.id)) return false;
+  if (game.result !== "Win" && game.result !== "Loss" && game.result !== "Draw") return false;
+  const startedAt = validIso(focus.experiment.startedAt);
+  const capturedAt = validIso(game.capturedAt);
+  if (!startedAt || !capturedAt || capturedAt <= startedAt) return false;
+  const sameReplay = Boolean(focus.insight.replayId && focus.insight.replayId === game.replayId);
+  const sameMatch = Boolean(focus.insight.matchId && focus.insight.matchId === game.matchId);
+  if ((sameReplay || sameMatch) && (!focus.insight.gameNumber || !game.gameNumber || focus.insight.gameNumber === game.gameNumber)) return false;
+  return isReplayCoachingGameEligible(focus.eligibility, game);
 }
 
 export function recordReplayCoachingGame(
@@ -345,12 +444,13 @@ export function recordReplayCoachingGame(
   now: string | Date = new Date()
 ): ReplayCoachingRecordResult {
   if (!focus.experiment) return { focus, recorded: false, reason: "no-experiment" };
+  if (focus.reflection?.value === "wrong") return { focus, recorded: false, reason: "capture-wrong" };
   if (focus.status !== "testing") return { focus, recorded: false, reason: "not-testing" };
-  if (!isReplayCoachingGameEligible(focus.eligibility, game)) return { focus, recorded: false, reason: "ineligible" };
+  if (!ADHERENCE_VALUES.has(adherence) || !isReplayCoachingGameEligibleForFocus(focus, game)) return { focus, recorded: false, reason: "ineligible" };
   if (focus.experiment.games.some((candidate) => candidate.id === game.id)) {
     return { focus, recorded: false, reason: "duplicate" };
   }
-  if (focus.experiment.games.length >= focus.experiment.targetEligibleGames) {
+  if (replayCoachingProgress(focus)?.readyForReview) {
     return { focus, recorded: false, reason: "target-complete" };
   }
   const recordedAt = isoDate(now);
@@ -377,13 +477,15 @@ export function replayCoachingProcessCounts(
   value: Partial<ReplayCoachingProcessCounts> | null | undefined
 ): ReplayCoachingProcessCounts {
   const followed = safeCount(value?.followed);
+  const adapted = safeCount(value?.adapted);
   const missed = safeCount(value?.missed);
   const unsure = safeCount(value?.unsure);
   const notApplicable = safeCount(value?.notApplicable);
-  const minimumEligible = followed + missed + unsure + notApplicable;
+  const minimumEligible = followed + adapted + missed + unsure + notApplicable;
   return {
     eligibleGames: Math.max(safeCount(value?.eligibleGames), minimumEligible),
     followed,
+    adapted,
     missed,
     unsure,
     notApplicable
@@ -394,7 +496,7 @@ export function replayCoachingProcessMetrics(
   value: Partial<ReplayCoachingProcessCounts> | null | undefined
 ): ReplayCoachingProcessMetrics {
   const counts = replayCoachingProcessCounts(value);
-  const opportunities = counts.followed + counts.missed + counts.unsure;
+  const opportunities = counts.followed + (counts.adapted ?? 0) + counts.missed + counts.unsure;
   const assessedOpportunities = counts.followed + counts.missed;
   return {
     ...counts,
@@ -410,13 +512,14 @@ export function replayCoachingProgress(focus: ReplayCoachingFocus): ReplayCoachi
   const duringCounts: ReplayCoachingProcessCounts = {
     eligibleGames: experiment.games.length,
     followed: experiment.games.filter((game) => game.adherence === "followed").length,
+    adapted: experiment.games.filter((game) => game.adherence === "adapted").length,
     missed: experiment.games.filter((game) => game.adherence === "missed").length,
     unsure: experiment.games.filter((game) => game.adherence === "unsure").length,
     notApplicable: experiment.games.filter((game) => game.adherence === "not-applicable").length
   };
   const before = replayCoachingProcessMetrics(experiment.baseline);
   const during = replayCoachingProcessMetrics(duringCounts);
-  const eligibleGamesTracked = experiment.games.length;
+  const eligibleGamesTracked = during.opportunities;
   const results = {
     wins: experiment.games.filter((game) => game.result === "Win").length,
     losses: experiment.games.filter((game) => game.result === "Loss").length,
@@ -558,6 +661,31 @@ function parseFocus(input: unknown, fallbackAt: string, migrated: boolean): Repl
   if (reflection) focus.reflection = reflection;
   const experiment = parseExperiment(record.experiment ?? (migrated ? record : undefined), id, createdAt);
   if (experiment) focus.experiment = experiment;
+  if (Array.isArray(record.experimentHistory)) {
+    const history = record.experimentHistory.flatMap((raw) => {
+      const item = parseExperiment(raw, id, createdAt);
+      return item ? [item] : [];
+    });
+    const seen = new Set<string>(experiment ? [experiment.id] : []);
+    focus.experimentHistory = history.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }
+  if (Array.isArray(record.conclusions)) {
+    const seen = new Set<string>();
+    focus.conclusions = record.conclusions.flatMap((raw): ReplayCoachingConclusion[] => {
+      const item = objectRecord(raw);
+      const experimentId = boundedText(item?.experimentId);
+      const note = boundedText(item?.note);
+      const decision = item?.decision as ReplayCoachingConclusionDecision;
+      const recordedAt = validIso(item?.recordedAt);
+      if (!experimentId || !note || !recordedAt || !CONCLUSION_DECISIONS.has(decision) || seen.has(experimentId)) return [];
+      seen.add(experimentId);
+      return [{ experimentId, note, decision, recordedAt }];
+    });
+  }
   return focus;
 }
 
@@ -582,7 +710,9 @@ function parseExperiment(
   const ids = new Set<string>();
   for (const raw of rawGames) {
     const game = parseObservation(raw, fallbackAt);
-    if (!game || ids.has(game.id) || games.length >= targetEligibleGames) continue;
+    // A trial may need any number of no-opportunity check-ins before its target.
+    // Preserve historical observations instead of truncating them to the target.
+    if (!game || ids.has(game.id)) continue;
     ids.add(game.id);
     games.push(game);
   }
@@ -595,6 +725,7 @@ function parseExperiment(
     baseline: replayCoachingProcessCounts({
       eligibleGames: numberValue(baselineRecord?.eligibleGames),
       followed: numberValue(baselineRecord?.followed),
+      adapted: numberValue(baselineRecord?.adapted),
       missed: numberValue(baselineRecord?.missed),
       unsure: numberValue(baselineRecord?.unsure),
       notApplicable: numberValue(baselineRecord?.notApplicable)
@@ -604,6 +735,9 @@ function parseExperiment(
   };
   const successSignal = boundedText(record.successSignal);
   if (successSignal) experiment.successSignal = successSignal;
+  for (const field of ["goalId", "goalText", "notebookDeckId"] as const) {
+    if (boundedText(record[field])) experiment[field] = boundedText(record[field]);
+  }
   const startedAt = validIso(record.startedAt);
   if (startedAt) experiment.startedAt = startedAt;
   return experiment;
@@ -621,6 +755,7 @@ function parseObservation(input: unknown, fallbackAt: string): ReplayCoachingGam
     matchId: boundedText(record.matchId),
     gameNumber: safeOptionalCount(record.gameNumber),
     deckKey: boundedText(record.deckKey),
+    deckVersionId: boundedText(record.deckVersionId),
     opponentLegend: boundedText(record.opponentLegend),
     gameStage: record.gameStage === "preboard" || record.gameStage === "postboard" ? record.gameStage : undefined,
     initiative: record.initiative === "1st" || record.initiative === "2nd" ? record.initiative : undefined,
@@ -715,6 +850,7 @@ function copyGameSnapshot(game: ReplayCoachingGameSnapshot): ReplayCoachingGameS
   if (boundedText(game.matchId)) copy.matchId = boundedText(game.matchId);
   if (safeOptionalCount(game.gameNumber) != null) copy.gameNumber = safeOptionalCount(game.gameNumber);
   if (boundedText(game.deckKey)) copy.deckKey = boundedText(game.deckKey);
+  if (boundedText(game.deckVersionId)) copy.deckVersionId = boundedText(game.deckVersionId);
   if (boundedText(game.opponentLegend)) copy.opponentLegend = boundedText(game.opponentLegend);
   if (game.gameStage === "preboard" || game.gameStage === "postboard") copy.gameStage = game.gameStage;
   if (game.initiative === "1st" || game.initiative === "2nd") copy.initiative = game.initiative;

@@ -1,0 +1,18 @@
+RIFTLITE BETA v0.9.73
+ATLAS DECK EDITING AND SIGNED ARTWORK
+
+- Edit Deck and New Deck on Atlas now stay inside RiftLite.
+- Use Back to Play to return to the lobby. Save in Atlas first; the return button does not save your deck.
+- When Atlas reports unsaved changes, choose Stay or Leave without saving.
+- Fixes the collapsed Atlas Player-name field that could persist in v0.9.72.
+- Adds all nine missing signed Vendetta variants and improves alternate-art handling in desktop card and replay views.
+- Updates the default Shadowblade Lurker artwork.
+- Improves replay-cache, cloud-backup, playback, export and embedded Atlas lifecycle handling.
+- Removes accumulated obsolete build files from new installers.
+
+Your existing profile, matches, decks, replays, settings and media paths are preserved.
+Replay Coach remains Coming Soon. Deck Insights remains available. Search Rules remains hidden.
+The local Your Move website demo and future training ideas are separate from this desktop update.
+
+macOS installers are ad-hoc signed and not Apple-notarized; the standard first-open warning may appear.
+Signed-in Atlas deck saving and live gameplay acceptance remain pending beyond automated release checks.

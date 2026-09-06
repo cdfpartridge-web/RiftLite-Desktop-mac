@@ -10,7 +10,7 @@ const artStart = appSource.indexOf("function homeOfficialDeckArtSources");
 const artEnd = appSource.indexOf("function HomeOfficialArtStack", artStart);
 const artSource = appSource.slice(artStart, artEnd);
 const homeStart = appSource.indexOf("function HomeView");
-const homeEnd = appSource.indexOf("type DeckComparisonSourceKind", homeStart);
+const homeEnd = appSource.indexOf("type MulliganLabLoadState", homeStart);
 const homeSource = appSource.slice(homeStart, homeEnd);
 
 describe("Home launchpad", () => {
@@ -33,11 +33,12 @@ describe("Home launchpad", () => {
     const releaseNotesEnd = appSource.indexOf("const RIOT_LEGAL_NOTICE", releaseNotesStart);
     const releaseNotesSource = appSource.slice(releaseNotesStart, releaseNotesEnd);
 
-    expect(releaseNotesSource).toContain("restore Atlas's existing Player name field");
-    expect(releaseNotesSource).toContain("reinforces native focus and presentation");
-    expect(releaseNotesSource).toContain("does not reload Atlas, clear site data, sign you out");
-    expect(releaseNotesSource).toContain("Matches page now stays the same width");
-    expect(releaseNotesSource).toContain("Replay Coach remains Coming Soon");
+    expect(releaseNotesSource).toContain("Atlas Edit Deck and New Deck now open inside RiftLite");
+    expect(releaseNotesSource).toContain("Back to Play");
+    expect(releaseNotesSource).toContain("unsaved deck changes");
+    expect(releaseNotesSource).toContain("collapsed Atlas Player name field that could persist in v0.9.72");
+    expect(releaseNotesSource).toContain("All nine signed Vendetta variants");
+    expect(releaseNotesSource).toContain("Replay Coach remains Coming Soon while we refine its review and practice flow.");
     expect(releaseNotesSource).not.toContain("Search Rules");
     expect(releaseNotesSource).not.toContain("Deck Insights is now the default Insights view");
   });

@@ -1,0 +1,161 @@
+.replay-coach-page {
+  --rc-panel: #0b1926;
+  --rc-line: #294151;
+  --rc-ink: #eff6fc;
+  --rc-muted: #9aaebe;
+  --rc-accent: #69e5d1;
+  color: var(--rc-ink);
+  color-scheme: dark;
+  font-size: 13px;
+  line-height: 1.55;
+  min-width: 0;
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 24px clamp(12px, 2vw, 28px);
+  container: replay-coach / inline-size;
+}
+.replay-coach-page * { box-sizing: border-box; }
+.replay-coach-page :is(h2,h3,h4,p) { margin: 0; }
+.replay-coach-page :is(button,input,textarea,select) { font: inherit; }
+.replay-coach-page button { cursor: pointer; }
+.replay-coach-page button:disabled { cursor: default; opacity: .45; }
+.replay-coach-page :is(button,summary,input,textarea,select):focus-visible { outline: 2px solid var(--rc-accent); outline-offset: 3px; }
+.replay-coach-page svg { flex-shrink: 0; }
+.replay-coach-page :is(p,strong,small,h3) { overflow-wrap: anywhere; }
+.replay-coach-page .rc-page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 20px; }
+.replay-coach-page .rc-page-heading h2 { font-size: clamp(22px, 2.2vw, 28px); line-height: 1.25; letter-spacing: -.7px; }
+.replay-coach-page .rc-page-heading p { color: var(--rc-muted); margin-top: 7px; }
+.replay-coach-page .rc-private { display: flex; align-items: center; gap: 6px; color: var(--rc-accent); font-size: 12px; white-space: nowrap; padding-top: 5px; }
+.replay-coach-page .rc-status { color: #c2e9df; font-size: 12px; }
+.replay-coach-page .rc-status:not(:empty) { padding: 10px 0 14px; }
+.replay-coach-page .rc-alert { padding: 12px 14px; border: 1px solid #97654c; border-radius: 8px; color: #ffe0c6; background: #30221d; margin-bottom: 15px; }
+.replay-coach-page .rc-steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; margin-bottom: 24px; border-bottom: 1px solid #273746; }
+.replay-coach-page .rc-step { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 2px 13px; color: #93aabd; border: 0; border-bottom: 2px solid transparent; background: transparent; font-size: 12px; }
+.replay-coach-page .rc-step b { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; font-size: 11px; font-weight: 500; border: 1px solid #3a5467; border-radius: 50%; }
+.replay-coach-page .rc-step[aria-current=step] { color: var(--rc-accent); border-bottom-color: var(--rc-accent); }
+.replay-coach-page .rc-step[aria-current=step] b { border-color: var(--rc-accent); background: #133731; }
+.replay-coach-page .rc-eyebrow { display: flex; align-items: center; gap: 7px; color: var(--rc-accent); font-size: 11px; font-weight: 600; letter-spacing: 1.1px; text-transform: uppercase; }
+.replay-coach-page .rc-panel { border: 1px solid var(--rc-line); border-radius: 16px; background: var(--rc-panel); }
+.replay-coach-page .rc-moment { padding: 26px; background: radial-gradient(ellipse at 95% 20%,#123a46 0%,transparent 52%),linear-gradient(130deg,#0b1e2f,#091522); border-color: #2a5961; }
+.replay-coach-page .rc-moment-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.replay-coach-page .rc-marker { display: flex; align-items: center; gap: 5px; color: #b8c5d6; font-size: 11px; background: #142839; border: 1px solid #304456; border-radius: 6px; padding: 4px 7px; }
+.replay-coach-page .rc-marker svg { color: #f3c567; }
+.replay-coach-page .rc-moment-grid { display: grid; grid-template-columns: minmax(0,1fr) 130px; align-items: start; gap: 26px; }
+.replay-coach-page .rc-moment-grid.rc-without-art { grid-template-columns: minmax(0,1fr); }
+.replay-coach-page .rc-moment h3 { font-size: clamp(24px,2.4vw,32px); font-weight: 700; line-height: 1.2; letter-spacing: -.7px; max-width: 650px; margin-bottom: 14px; }
+.replay-coach-page .rc-body-copy { font-size: 13px; color: #adc3d2; line-height: 1.7; }
+.replay-coach-page .rc-card-art { display: block; width: 100%; aspect-ratio: 744/1039; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px #030b13; }
+.replay-coach-page .rc-card-caption { margin-top: 9px; color: #a3bfd0; text-align: center; font-size: 11px; }
+.replay-coach-page .rc-art-placeholder { display: grid; min-height: 150px; place-items: center; border: 1px solid var(--rc-line); border-radius: 10px; }
+.replay-coach-page .rc-meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 20px; }
+.replay-coach-page .rc-meta span { font-size: 11px; color: #bdcfde; background: #122737; border: 1px solid #2a4050; border-radius: 5px; padding: 3px 8px; }
+.replay-coach-page .rc-plan { padding: 13px 15px; border-left: 2px solid #567795; background: #102332; border-radius: 0 8px 8px 0; margin: 16px 0 22px; }
+.replay-coach-page .rc-plan small { display: block; font-size: 12px; color: #99b3c6; margin-bottom: 6px; }
+.replay-coach-page .rc-plan p { color: #d9e5ee; font-size: 13px; white-space: pre-wrap; }
+.replay-coach-page .rc-plan p + p { margin-top: 6px; }
+.replay-coach-page .rc-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.replay-coach-page .rc-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 9px 14px; border: 1px solid #355064; border-radius: 8px; color: #d4e5f1; background: #132838; font-size: 12px; font-weight: 500; line-height: 1.4; text-decoration: none; }
+.replay-coach-page .rc-button:hover { background: #1b374b; border-color: #56808e; }
+.replay-coach-page .rc-button.rc-primary { border-color: var(--rc-accent); background: var(--rc-accent); color: #062423; font-weight: 700; }
+.replay-coach-page .rc-button.rc-primary:hover { filter: brightness(1.08); }
+.replay-coach-page .rc-button.rc-quiet { border-color: transparent; background: transparent; color: #a1b9cb; padding-inline: 4px; }
+.replay-coach-page .rc-subtle { font-size: 12px; color: #98b2c4; }
+.replay-coach-page .rc-active-practice { display: flex; align-items: center; gap: 13px; padding: 15px 18px; margin-bottom: 20px; }
+.replay-coach-page .rc-active-practice > svg { color: var(--rc-accent); }
+.replay-coach-page .rc-active-practice > div { flex: 1; min-width: 0; }
+.replay-coach-page .rc-active-practice p { color: var(--rc-muted); font-size: 12px; margin-top: 3px; }
+.replay-coach-page .rc-stage-title { font-size: 23px; font-weight: 600; line-height: 1.3; letter-spacing: -.5px; margin: 7px 0 8px; }
+.replay-coach-page .rc-stage-intro { color: var(--rc-muted); font-size: 13px; margin-bottom: 20px; }
+.replay-coach-page .rc-reflect-grid { display: grid; grid-template-columns: minmax(0,.96fr) minmax(0,1.04fr); gap: 22px; margin-top: 18px; }
+.replay-coach-page .rc-evidence { padding: 20px; }
+.replay-coach-page .rc-evidence h4 { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #c5e5e8; margin-bottom: 14px; }
+.replay-coach-page .rc-evidence h4 svg { color: var(--rc-accent); }
+.replay-coach-page .rc-evidence-card { display: flex; align-items: center; gap: 16px; padding: 14px; margin: 16px 0; border: 1px solid #2a4354; border-radius: 10px; background: radial-gradient(ellipse,#163448,#0b1521); }
+.replay-coach-page .rc-evidence-card img { width: 80px; border-radius: 6px; }
+.replay-coach-page .rc-evidence-card strong { display: block; font-size: 13px; }
+.replay-coach-page .rc-evidence-card small { display: block; font-size: 12px; color: var(--rc-accent); margin-top: 8px; }
+.replay-coach-page .rc-evidence-links { display: grid; gap: 7px; margin: 18px 0; }
+.replay-coach-page .rc-evidence-link { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 11px; border: 1px solid #2d4a5b; border-radius: 8px; background: #102432; color: #d5e7ee; }
+.replay-coach-page .rc-evidence-link > span { flex: 1; min-width: 0; }
+.replay-coach-page .rc-evidence-link strong { display: block; font-size: 12px; font-weight: 500; }
+.replay-coach-page .rc-evidence-link small { display: block; color: var(--rc-accent); font-size: 11px; margin-top: 3px; }
+.replay-coach-page .rc-reflection { min-width: 0; }
+.replay-coach-page fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.replay-coach-page legend { font-size: 13px; font-weight: 500; margin-bottom: 11px; color: #dce8f4; }
+.replay-coach-page .rc-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.replay-coach-page .rc-choice { display: flex; gap: 8px; align-items: center; padding: 11px 10px; min-height: 43px; border: 1px solid #344858; border-radius: 8px; background: #101f2d; color: #b5c8d8; font-size: 12px; text-align: left; }
+.replay-coach-page .rc-choice[aria-pressed=true] { color: var(--rc-accent); background: #12342f; border-color: #4c9588; }
+.replay-coach-page .rc-field { display: block; font-size: 12px; color: #c3d8e6; margin-top: 16px; min-width: 0; }
+.replay-coach-page .rc-field :is(input,textarea,select) { display: block; width: 100%; min-width: 0; margin-top: 8px; padding: 11px 12px; background: #081522; color: #e1edf4; border: 1px solid #355062; border-radius: 8px; font-size: 13px; line-height: 1.55; }
+.replay-coach-page .rc-field textarea { resize: vertical; min-height: 100px; }
+.replay-coach-page textarea::placeholder, .replay-coach-page input::placeholder { color: #859fb2; }
+.replay-coach-page .rc-response { display: flex; align-items: flex-start; gap: 8px; padding: 12px 13px; margin: 15px 0; border: 1px solid #2c6059; border-radius: 8px; background: #0e2c29; color: #b3e4d6; font-size: 12px; line-height: 1.65; }
+.replay-coach-page .rc-response svg { margin-top: 3px; }
+.replay-coach-page .rc-wrong { display: block; background: none; border: 0; color: #a3b8c9; padding: 15px 0 0; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.replay-coach-page .rc-practice-panel { padding: 24px; margin-top: 16px; background: radial-gradient(ellipse at 95% 4%,#182d3e,transparent 55%),#0b1926; }
+.replay-coach-page .rc-rule-fields { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 13px 10px; align-items: start; margin: 18px 0; }
+.replay-coach-page .rc-rule-fields > label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #a2b9cb; padding-top: 12px; }
+.replay-coach-page .rc-rule-fields :is(input,textarea) { width: 100%; min-width: 0; border: 1px solid #355062; border-radius: 8px; background: #0a1724; color: #e6f3f8; padding: 11px 13px; font-size: 14px; line-height: 1.5; resize: vertical; }
+.replay-coach-page .rc-rule-fields textarea { min-height: 80px; border-color: #4d928a; background: #102a2b; }
+.replay-coach-page .rc-practice-controls { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 24px; align-items: end; margin: 23px 0; }
+.replay-coach-page .rc-practice-controls .rc-field { margin: 0; }
+.replay-coach-page .rc-game-target { display: flex; gap: 4px; padding: 4px; border: 1px solid #324858; border-radius: 9px; background: #091722; }
+.replay-coach-page .rc-game-target button { background: none; border: 0; color: #abc2d1; border-radius: 5px; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.replay-coach-page .rc-game-target button[aria-pressed=true] { color: #e2f8f4; background: #254a46; }
+.replay-coach-page .rc-scope { display: flex; gap: 8px; align-items: flex-start; color: #a1bacc; font-size: 12px; margin: 14px 0 21px; }
+.replay-coach-page .rc-scope svg { margin-top: 3px; }
+.replay-coach-page .rc-trial-header { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin: 22px 0 9px; font-size: 12px; color: #adc6d5; }
+.replay-coach-page .rc-trial-header strong { color: var(--rc-accent); font-weight: 500; }
+.replay-coach-page .rc-progress { display: block; width: 100%; height: 6px; border: 0; appearance: none; margin-bottom: 20px; border-radius: 4px; overflow: hidden; }
+.replay-coach-page .rc-progress::-webkit-progress-bar { background: #1e3748; }
+.replay-coach-page .rc-progress::-webkit-progress-value { background: var(--rc-accent); }
+.replay-coach-page .rc-checkin-list { display: grid; }
+.replay-coach-page .rc-checkin-row { display: flex; align-items: center; gap: 11px; padding: 14px 0; border-bottom: 1px solid #243b4b; }
+.replay-coach-page .rc-checkin-row > svg { color: var(--rc-accent); }
+.replay-coach-page .rc-checkin-row > div { flex: 1; min-width: 0; }
+.replay-coach-page .rc-checkin-row strong { display: block; font-size: 12px; font-weight: 500; }
+.replay-coach-page .rc-checkin-row small { display: block; color: #91adbf; font-size: 11px; margin-top: 3px; }
+.replay-coach-page .rc-checkin-label { font-size: 12px; color: #b8dacc; }
+.replay-coach-page .rc-next-game { padding: 20px 0 12px; }
+.replay-coach-page .rc-next-game h4, .replay-coach-page .rc-conclusion h4 { font-size: 15px; }
+.replay-coach-page .rc-next-game > p { margin: 6px 0 15px; color: #a5bed0; font-size: 12px; }
+.replay-coach-page .rc-conclusion { margin: 24px 0 12px; padding-top: 20px; border-top: 1px solid var(--rc-line); }
+.replay-coach-page .rc-conclusion .rc-actions { margin-top: 15px; }
+.replay-coach-page .rc-conclusion .rc-subtle, .replay-coach-page .rc-practice-panel > .rc-actions + .rc-subtle { margin-top: 15px; }
+.replay-coach-page .rc-secondary-actions { margin-top: 22px; }
+.replay-coach-page .rc-goal-strip { display: flex; align-items: center; gap: 9px; color: #c2b4eb; font-size: 12px; margin-bottom: 12px; }
+.replay-coach-page .rc-journal { border-top: 1px solid #2a3d4e; margin-top: 28px; padding-top: 17px; }
+.replay-coach-page .rc-journal summary { display: flex; align-items: center; gap: 9px; cursor: pointer; color: #bcd0de; }
+.replay-coach-page .rc-journal summary small { color: #8aa5b9; margin-left: auto; font-size: 12px; }
+.replay-coach-page .rc-journal > p { padding-top: 14px; }
+.replay-coach-page .rc-journal-entry { padding: 17px 0; border-bottom: 1px solid #243b4b; }
+.replay-coach-page .rc-journal-entry strong { display: block; font-size: 13px; }
+.replay-coach-page .rc-journal-entry small { display: block; color: #98b0c3; font-size: 11px; margin: 4px 0 9px; }
+.replay-coach-page .rc-journal-entry p { color: #b6c9d8; font-size: 12px; margin-bottom: 12px; white-space: pre-wrap; }
+.replay-coach-page .rc-journal-entry .rc-journal-conclusion { color: #bbe3d8; }
+.replay-coach-page .rc-empty { padding: 35px; text-align: center; }
+.replay-coach-page .rc-empty > svg { color: var(--rc-accent); margin-bottom: 14px; }
+.replay-coach-page .rc-empty h3 { font-size: 23px; margin-bottom: 12px; }
+.replay-coach-page .rc-empty p { color: var(--rc-muted); max-width: 530px; margin: 0 auto 22px; }
+.replay-coach-page .rc-empty .rc-actions { justify-content: center; }
+@container replay-coach (max-width: 720px) {
+  .replay-coach-page .rc-page-heading { flex-direction: column; gap: 8px; }
+  .replay-coach-page .rc-reflect-grid { grid-template-columns: minmax(0,1fr); }
+  .replay-coach-page .rc-moment { padding: 21px; }
+  .replay-coach-page .rc-moment-grid { grid-template-columns: minmax(0,1fr) 105px; gap: 18px; }
+  .replay-coach-page .rc-moment h3 { font-size: 25px; }
+  .replay-coach-page .rc-active-practice { flex-wrap: wrap; }
+}
+@container replay-coach (max-width: 440px) {
+  .replay-coach-page .rc-step { flex-direction: column; gap: 6px; font-size: 11px; }
+  .replay-coach-page .rc-moment-top { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .replay-coach-page .rc-moment-grid { grid-template-columns: minmax(0,1fr); }
+  .replay-coach-page .rc-moment-grid > div + div { max-width: 115px; justify-self: center; }
+  .replay-coach-page :is(.rc-moment,.rc-evidence,.rc-practice-panel,.rc-empty) { padding: 17px; }
+  .replay-coach-page .rc-practice-controls { grid-template-columns: minmax(0,1fr); gap: 17px; }
+  .replay-coach-page .rc-rule-fields { grid-template-columns: minmax(0,1fr); gap: 7px; }
+  .replay-coach-page .rc-rule-fields > label { padding-top: 4px; }
+  .replay-coach-page .rc-checkin-row { flex-wrap: wrap; }
+  .replay-coach-page .rc-checkin-label { max-width: 110px; }
+}
