@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
@@ -10,7 +10,9 @@ import rendererConfig from "../vite.config";
 
 describe("renderer build output", () => {
   it("replaces obsolete assets on rebuild while preserving other Electron output", async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), "riftlite-renderer-build-"));
+    // Vite resolves entry paths; keep its root on the same canonical macOS temp path.
+    const fixtureParent = await realpath(tmpdir());
+    const fixtureRoot = await mkdtemp(join(fixtureParent, "riftlite-renderer-build-"));
     try {
       const rendererOutput = resolve(fixtureRoot, rendererConfig.build!.outDir!);
       // Fail before a build can clear any path outside this disposable fixture.
@@ -62,7 +64,7 @@ describe("renderer build output", () => {
         expect(await readFile(join(fixtureRoot, "dist", file), "utf8")).toBe(`preserve ${file}`);
       }
     } finally {
-      if (dirname(fixtureRoot) === resolve(tmpdir()) && basename(fixtureRoot).startsWith("riftlite-renderer-build-")) {
+      if (dirname(fixtureRoot) === fixtureParent && basename(fixtureRoot).startsWith("riftlite-renderer-build-")) {
         await rm(fixtureRoot, { recursive: true, force: true });
       }
     }
